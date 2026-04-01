@@ -1,6 +1,7 @@
 import React from "react";
 
 const Input = ({
+  label,
   type = "text",
   placeholder = "",
   value,
@@ -13,6 +14,14 @@ const Input = ({
 }) => {
   return (
     <div className="flex flex-col gap-1">
+      {label && (
+        <label
+          htmlFor={id}
+          className="text-sm font-medium text-gray-700"
+        >
+          {label}
+        </label>
+      )}
       <input
         id={id}
         name={name}
