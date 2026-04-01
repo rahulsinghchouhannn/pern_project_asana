@@ -4,7 +4,7 @@ const successResponse = require("../utils/successResponse");
 const errorResponse = require("../utils/errorResponse");
 
 const getMe = asyncHandler(async (req, res) => {
-  const user = await userService.getUserById(req.user.id);
+  const user = await userService.getUserById(req.user.userId);
   if (!user) {
     return res.status(404).json(errorResponse("User not found"));
   }

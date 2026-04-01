@@ -6,9 +6,11 @@ const getUserById = async (id) => {
   const [user] = await db
     .select({
       id: users.id,
-      email: users.email,
       name: users.name,
-      isActive: users.isActive,
+      email: users.email,
+      avatarUrl: users.avatarUrl,
+      isEmailVerified: users.isEmailVerified,
+      lastActiveOrgId: users.lastActiveOrgId,
       createdAt: users.createdAt,
     })
     .from(users)
@@ -22,9 +24,9 @@ const getAllUsers = async ({ limit = 10, offset = 0 } = {}) => {
   const result = await db
     .select({
       id: users.id,
-      email: users.email,
       name: users.name,
-      isActive: users.isActive,
+      email: users.email,
+      avatarUrl: users.avatarUrl,
       createdAt: users.createdAt,
     })
     .from(users)
@@ -41,8 +43,8 @@ const updateUser = async (id, updates) => {
     .where(eq(users.id, id))
     .returning({
       id: users.id,
-      email: users.email,
       name: users.name,
+      email: users.email,
       updatedAt: users.updatedAt,
     });
 

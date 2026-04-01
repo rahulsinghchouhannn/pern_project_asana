@@ -41,6 +41,7 @@
   },
   "dependencies": {
     "@remix-run/router": "^1.23.2",
+    "drizzle-orm": "^0.45.2",
     "mime": "^4.1.0",
     "rollup": "^4.60.1"
   }
