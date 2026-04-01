@@ -14,14 +14,21 @@
     "db:seed": "node src/db/seed/index.js"
   },
   "dependencies": {
+    "@dabh/diagnostics": "^2.0.8",
+    "async": "^3.2.6",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.30.10",
     "express": "^4.19.2",
     "express-rate-limit": "^7.3.1",
+    "forwarded": "^0.2.0",
     "helmet": "^7.1.0",
+    "ipaddr.js": "^2.3.0",
     "jsonwebtoken": "^9.0.2",
+    "logform": "^2.7.0",
+    "media-typer": "^1.1.0",
+    "one-time": "^1.0.0",
     "pg": "^8.11.5",
     "winston": "^3.13.0",
     "zod": "^3.23.8"

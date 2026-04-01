@@ -21,6 +21,7 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.60.1",
     "concurrently": "^8.2.2",
     "husky": "^9.0.11",
     "lint-staged": "^15.2.2",
@@ -35,5 +36,10 @@
       "eslint --fix",
       "prettier --write"
     ]
+  },
+  "dependencies": {
+    "@remix-run/router": "^1.23.2",
+    "mime": "^4.1.0",
+    "rollup": "^4.60.1"
   }
 }
