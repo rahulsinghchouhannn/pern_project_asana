@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  workflow_call:
+  pull_request:
+  push:
+    branches-ignore:
+      - stagging
+
+jobs:
+  ci:
+    name: CI Pipeline
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: asana_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint
+
+      - name: Test backend
+        working-directory: backend
+        run: npm test
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://test:test@localhost:5432/asana_test
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-test-jwt-secret-32chars-min' }}
+          JWT_EXPIRES_IN: 7d
+
+      - name: Test frontend
+        working-directory: frontend
+        run: npm test
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Check migration drift
+        working-directory: backend
+        run: |
+          npm run db:generate
+          git diff --exit-code src/db/migrations || (echo "ERROR: Migration drift detected. Run 'npm run db:generate' and commit the changes." && exit 1)
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/asana_test
