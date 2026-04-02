@@ -36,6 +36,13 @@
       "when": 1775126386036,
       "tag": "0004_familiar_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775129300373,
+      "tag": "0005_outstanding_lady_vermin",
+      "breakpoints": true
     }
   ]
 }

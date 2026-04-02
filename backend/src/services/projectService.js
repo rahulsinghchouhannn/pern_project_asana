@@ -1,6 +1,7 @@
 const { eq, and, inArray, count } = require("drizzle-orm");
 const { db } = require("../db");
 const { projects, projectMembers, projectStatuses, users } = require("../db/schema");
+const activityService = require("./activityService");
 const logger = require("../config/logger");
 
 // ─── Default statuses seeded on project creation ─────────────────────────────
@@ -65,6 +66,14 @@ const createProject = async (orgId, userId, data) => {
     .from(projectStatuses)
     .where(eq(projectStatuses.projectId, project.id))
     .limit(50);
+
+  activityService.log({
+    orgId,
+    projectId: project.id,
+    actorId: userId,
+    action: "project_created",
+    metadata: { projectName: project.name },
+  }).catch((err) => logger.error({ message: "Failed to log project_created", err }));
 
   logger.info({ message: "Project created", projectId: project.id, userId });
 

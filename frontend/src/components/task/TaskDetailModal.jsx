@@ -1,24 +1,16 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import { useAppSelector } from "@/store/hooks";
 import taskService from "@/services/taskService";
 import customFieldService from "@/services/customFieldService";
 import TaskPriorityBadge from "./TaskPriorityBadge";
 import CustomFieldValue from "@/components/customFields/CustomFieldValue";
+import ActivityFeed from "@/components/collaboration/ActivityFeed";
 
 const PRIORITIES = ["none", "low", "medium", "high", "urgent"];
 
 const formatDate = (d) => {
   if (!d) return "";
   return new Date(d).toISOString().split("T")[0];
-};
-
-const formatHistoryDate = (d) => {
-  if (!d) return "";
-  return new Date(d).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 };
 
 // Debounce hook
@@ -34,10 +26,10 @@ const useDebounce = (fn, delay) => {
 };
 
 const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = [], onClose, onUpdated }) => {
+  const { user } = useAppSelector((s) => s.auth);
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [showSubtasks, setShowSubtasks] = useState(true);
   const [addAssigneeId, setAddAssigneeId] = useState("");
   const [customFields, setCustomFields] = useState([]);
@@ -411,47 +403,12 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
               </div>
             )}
 
-            {/* Activity / History */}
-            <div>
-              <button
-                className="flex items-center gap-1 text-xs font-medium text-gray-500 uppercase tracking-wide"
-                onClick={() => setShowHistory((v) => !v)}
-              >
-                <svg
-                  className={`w-3.5 h-3.5 transition-transform ${showHistory ? "rotate-90" : ""}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-                Activity
-              </button>
-              {showHistory && (
-                <ul className="mt-2 space-y-2">
-                  {(task.history ?? []).length === 0 && (
-                    <li className="text-xs text-gray-400">No activity yet.</li>
-                  )}
-                  {(task.history ?? []).map((entry) => (
-                    <li key={entry.id} className="flex items-start gap-2 text-xs text-gray-600">
-                      <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-gray-600 font-medium text-[10px]">
-                          {entry.userName?.[0]?.toUpperCase() ?? "?"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="font-medium text-gray-700">{entry.userName}</span>{" "}
-                        <span className="text-gray-500">{entry.action.replace(/_/g, " ")}</span>
-                        {entry.toValue && (
-                          <span className="text-gray-500"> → {entry.toValue}</span>
-                        )}
-                        <div className="text-gray-400 mt-0.5">{formatHistoryDate(entry.createdAt)}</div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            {/* Activity Feed (comments + history) */}
+            <ActivityFeed
+              taskId={taskId}
+              projectMembers={projectMembers}
+              currentUserId={user?.id}
+            />
           </div>
         )}
       </div>

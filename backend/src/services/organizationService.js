@@ -3,6 +3,7 @@ const { eq, and, gt } = require("drizzle-orm");
 const { db } = require("../db");
 const { organizations, organizationMembers, invitations, users, roles, rolePermissions, userRoles } = require("../db/schema");
 const { ALL_PERMISSIONS, ADMIN_PERMISSIONS, MEMBER_PERMISSIONS } = require("../config/permissions");
+const activityService = require("./activityService");
 const logger = require("../config/logger");
 
 // ─── System role seeding ──────────────────────────────────────────────────────
@@ -152,6 +153,13 @@ const inviteUser = async (orgId, invitedBy, email) => {
     })
     .returning();
 
+  activityService.log({
+    orgId,
+    actorId: invitedBy,
+    action: "member_invited",
+    metadata: { email },
+  }).catch((err) => logger.error({ message: "Failed to log member_invited", err }));
+
   logger.info({ message: "Invitation created", orgId, invitedEmail: email });
 
   return invitation;
@@ -202,6 +210,12 @@ const acceptInvitation = async (token, userId) => {
     .update(invitations)
     .set({ status: "accepted" })
     .where(eq(invitations.id, invitation.id));
+
+  activityService.log({
+    orgId: invitation.organizationId,
+    actorId: userId,
+    action: "member_joined",
+  }).catch((err) => logger.error({ message: "Failed to log member_joined", err }));
 
   logger.info({ message: "Invitation accepted", orgId: invitation.organizationId, userId });
 

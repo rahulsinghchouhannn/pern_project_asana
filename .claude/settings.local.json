@@ -13,7 +13,8 @@
       "Bash(node -e \"require\\('./backend/src/routes/taskRoutes'\\); console.log\\('taskRoutes: OK'\\)\")",
       "Bash(node -e \"require\\('./src/routes/index.js'\\); console.log\\('Routes OK'\\)\")",
       "Bash(node -e \"require\\('./src/services/customFieldService.js'\\); console.log\\('Service OK'\\)\")",
-      "Bash(node -e \"require\\('./src/services/taskService.js'\\); console.log\\('TaskService OK'\\)\")"
+      "Bash(node -e \"require\\('./src/services/taskService.js'\\); console.log\\('TaskService OK'\\)\")",
+      "Bash(xargs grep:*)"
     ]
   }
 }

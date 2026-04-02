@@ -1,5 +1,6 @@
 const asyncHandler = require("../middleware/asyncHandler");
 const userService = require("../services/userService");
+const activityService = require("../services/activityService");
 const successResponse = require("../utils/successResponse");
 const errorResponse = require("../utils/errorResponse");
 
@@ -18,4 +19,20 @@ const getAllUsers = asyncHandler(async (req, res) => {
   res.status(200).json(successResponse(result));
 });
 
-module.exports = { getMe, getAllUsers };
+const getUserActivity = asyncHandler(async (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
+  const activity = await activityService.getUserActivity(req.user.userId, req.org.orgId, limit);
+  res.status(200).json(successResponse(activity));
+});
+
+const archiveAll = asyncHandler(async (req, res) => {
+  await activityService.archiveAll(req.user.userId, req.org.orgId);
+  res.status(200).json(successResponse({ archived: true }));
+});
+
+const markActivityRead = asyncHandler(async (req, res) => {
+  await activityService.markRead(req.params.id, req.user.userId);
+  res.status(200).json(successResponse({ read: true }));
+});
+
+module.exports = { getMe, getAllUsers, getUserActivity, archiveAll, markActivityRead };

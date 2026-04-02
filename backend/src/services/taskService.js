@@ -10,6 +10,7 @@ const {
   projectStatuses,
 } = require("../db/schema");
 const { getBulkTaskFieldValues, getTaskFieldValues } = require("./customFieldService");
+const activityService = require("./activityService");
 const logger = require("../config/logger");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -147,6 +148,15 @@ const createTask = async (projectId, orgId, creatorId, data) => {
   }
 
   await Promise.all(inserts);
+
+  activityService.log({
+    orgId,
+    projectId,
+    taskId: task.id,
+    actorId: creatorId,
+    action: "task_created",
+    metadata: { taskTitle: task.title },
+  }).catch((err) => logger.error({ message: "Failed to log task_created", err }));
 
   logger.info({ message: "Task created", taskId: task.id, projectId, creatorId });
 
@@ -319,6 +329,25 @@ const updateTask = async (taskId, userId, data) => {
   if (data.statusId !== undefined && data.statusId !== existing.statusId) {
     updates.statusId = data.statusId;
     historyInserts.push(insertHistory(taskId, userId, "status_changed", existing.statusId, data.statusId));
+
+    // Log activity with status names (fire-and-forget after async lookup)
+    db
+      .select({ id: projectStatuses.id, name: projectStatuses.name })
+      .from(projectStatuses)
+      .where(inArray(projectStatuses.id, [existing.statusId, data.statusId]))
+      .then((statusRows) => {
+        const nameMap = {};
+        statusRows.forEach((r) => { nameMap[r.id] = r.name; });
+        return activityService.log({
+          orgId: existing.organizationId,
+          projectId: existing.projectId,
+          taskId,
+          actorId: userId,
+          action: "status_changed",
+          metadata: { from: nameMap[existing.statusId] ?? existing.statusId, to: nameMap[data.statusId] ?? data.statusId },
+        });
+      })
+      .catch((err) => logger.error({ message: "Failed to log status_changed", err }));
   }
   if (data.priority !== undefined && data.priority !== existing.priority) {
     updates.priority = data.priority;
@@ -376,6 +405,15 @@ const completeTask = async (taskId, userId) => {
     .where(eq(tasks.id, taskId));
 
   await insertHistory(taskId, userId, "completed", "false", "true");
+
+  activityService.log({
+    orgId: task.organizationId,
+    projectId: task.projectId,
+    taskId,
+    actorId: userId,
+    action: "task_completed",
+  }).catch((err) => logger.error({ message: "Failed to log task_completed", err }));
+
   return getTaskById(taskId);
 };
 
@@ -400,6 +438,33 @@ const addAssignee = async (taskId, userId, assignedBy) => {
 
   await db.insert(taskAssignees).values({ taskId, userId, assignedBy });
   await insertHistory(taskId, assignedBy, "assigned", null, userId);
+
+  // Log activity with assignee name (fire-and-forget after lookup)
+  db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+    .then(([assignee]) => {
+      const taskRow = db
+        .select({ orgId: tasks.organizationId, projectId: tasks.projectId })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1)
+        .then(([t]) => {
+          if (!t) return;
+          return activityService.log({
+            orgId: t.orgId,
+            projectId: t.projectId,
+            taskId,
+            actorId: assignedBy,
+            action: "task_assigned",
+            metadata: { assigneeName: assignee?.name ?? userId },
+          });
+        });
+      return taskRow;
+    })
+    .catch((err) => logger.error({ message: "Failed to log task_assigned", err }));
 
   return getTaskById(taskId);
 };

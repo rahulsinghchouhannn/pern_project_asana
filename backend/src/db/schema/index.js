@@ -17,6 +17,10 @@ const { roles } = require("./roles");
 const { rolePermissions } = require("./rolePermissions");
 const { userRoles } = require("./userRoles");
 const { projectRoles } = require("./projectRoles");
+const { comments } = require("./comments");
+const { commentMentions } = require("./commentMentions");
+const { activityLogs } = require("./activityLogs");
+const { userActivityRead } = require("./userActivityRead");
 
 module.exports = {
   users,
@@ -38,4 +42,8 @@ module.exports = {
   rolePermissions,
   userRoles,
   projectRoles,
+  comments,
+  commentMentions,
+  activityLogs,
+  userActivityRead,
 };
