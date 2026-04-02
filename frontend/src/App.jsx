@@ -1,6 +1,9 @@
-import React from "react";
+import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useAppSelector } from "@/store/hooks";
+import { useAppSelector, useAppDispatch } from "@/store/hooks";
+import { logout } from "@/store/slices/authSlice";
+import authService from "@/services/authService";
+import Spinner from "@/components/ui/Spinner";
 import Layout from "@/components/Layout/Layout";
 import ProjectListPage from "@/pages/ProjectListPage";
 import ProjectPage from "@/pages/ProjectPage";
@@ -12,9 +15,10 @@ import OrgSelectorPage from "@/pages/OrgSelectorPage";
 import InvitationAcceptPage from "@/pages/InvitationAcceptPage";
 
 // ─── Auth guard — redirects unauthenticated users to /login ────────────────────
-const RequireAuth = ({ children }) => {
+const RequireAuth = ({ children, isHydrated }) => {
   const { token } = useAppSelector((s) => s.auth);
   const location = useLocation();
+  if (!isHydrated) return null;
   if (!token) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
@@ -22,14 +26,41 @@ const RequireAuth = ({ children }) => {
 };
 
 // ─── Org guard — redirects authenticated users with no currentOrg to /select-org
-const RequireOrg = ({ children }) => {
+const RequireOrg = ({ children, isHydrated }) => {
   const { token, currentOrg } = useAppSelector((s) => s.auth);
+  if (!isHydrated) return null;
   if (!token) return <Navigate to="/login" replace />;
   if (!currentOrg) return <Navigate to="/select-org" replace />;
   return children;
 };
 
 const App = () => {
+  const [isHydrated, setIsHydrated] = useState(false);
+  const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    const savedToken = localStorage.getItem("accessToken");
+    if (!savedToken) {
+      setIsHydrated(true);
+      return;
+    }
+    authService
+      .getMe()
+      .then(() => setIsHydrated(true))
+      .catch(() => {
+        dispatch(logout());
+        setIsHydrated(true);
+      });
+  }, [dispatch]);
+
+  if (!isHydrated) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-[#1F1F1F]">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
   return (
     <Routes>
       {/* ── Public routes ──────────────────────────────────────────────────── */}
@@ -44,7 +75,7 @@ const App = () => {
       <Route
         path="/select-org"
         element={
-          <RequireAuth>
+          <RequireAuth isHydrated={isHydrated}>
             <OrgSelectorPage />
           </RequireAuth>
         }
@@ -53,7 +84,7 @@ const App = () => {
       {/* ── Org-scoped routes — wrapped by Layout ─────────────────────────── */}
       <Route
         element={
-          <RequireOrg>
+          <RequireOrg isHydrated={isHydrated}>
             <Layout />
           </RequireOrg>
         }

@@ -30,7 +30,7 @@ export const loginUser = createAsyncThunk(
 
 export const logoutUser = createAsyncThunk(
   "auth/logoutUser",
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { getState }) => {
     try {
       const { refreshToken } = getState().auth;
       if (refreshToken) await authService.logout(refreshToken);
@@ -89,33 +89,68 @@ export const switchOrganization = createAsyncThunk(
   }
 );
 
+// ─── localStorage helpers ──────────────────────────────────────────────────────
+
+const persistAuthToStorage = ({ accessToken, refreshToken, user }) => {
+  if (accessToken) localStorage.setItem("accessToken", accessToken);
+  if (refreshToken) localStorage.setItem("refreshToken", refreshToken);
+  if (user) localStorage.setItem("user", JSON.stringify(user));
+};
+
+const clearAuthFromStorage = () => {
+  localStorage.removeItem("accessToken");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("user");
+  localStorage.removeItem("currentOrg");
+};
+
+// ─── Hydrate initial state from localStorage ───────────────────────────────────
+
+const tokenFromStorage = localStorage.getItem("accessToken");
+const userFromStorage = localStorage.getItem("user");
+const refreshTokenFromStorage = localStorage.getItem("refreshToken");
+const currentOrgFromStorage = localStorage.getItem("currentOrg");
+
+const initialState = {
+  user: userFromStorage ? JSON.parse(userFromStorage) : null,
+  token: tokenFromStorage || null,
+  refreshToken: refreshTokenFromStorage || null,
+  organizations: [],
+  currentOrg: currentOrgFromStorage ? JSON.parse(currentOrgFromStorage) : null,
+  isLoading: false,
+  error: null,
+};
+
 // ─── Slice ─────────────────────────────────────────────────────────────────────
 
 const authSlice = createSlice({
   name: "auth",
-  initialState: {
-    user: null,
-    token: null,
-    refreshToken: null,
-    organizations: [],
-    currentOrg: null,
-    isLoading: false,
-    error: null,
-  },
+  initialState,
   reducers: {
     setCredentials: (state, action) => {
       state.user = action.payload.user;
       state.token = action.payload.token;
       state.refreshToken = action.payload.refreshToken ?? state.refreshToken;
+      persistAuthToStorage({
+        accessToken: action.payload.token,
+        refreshToken: action.payload.refreshToken,
+        user: action.payload.user,
+      });
     },
     setCurrentOrg: (state, action) => {
       state.currentOrg = action.payload;
+      if (action.payload) {
+        localStorage.setItem("currentOrg", JSON.stringify(action.payload));
+      } else {
+        localStorage.removeItem("currentOrg");
+      }
     },
     setOrganizations: (state, action) => {
       state.organizations = action.payload;
     },
     tokenRefreshed: (state, action) => {
       state.token = action.payload;
+      localStorage.setItem("accessToken", action.payload);
     },
     logout: (state) => {
       state.user = null;
@@ -124,6 +159,7 @@ const authSlice = createSlice({
       state.organizations = [];
       state.currentOrg = null;
       state.error = null;
+      clearAuthFromStorage();
     },
     clearError: (state) => {
       state.error = null;
@@ -141,6 +177,11 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.accessToken;
         state.refreshToken = action.payload.refreshToken;
+        persistAuthToStorage({
+          accessToken: action.payload.accessToken,
+          refreshToken: action.payload.refreshToken,
+          user: action.payload.user,
+        });
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.isLoading = false;
@@ -162,8 +203,14 @@ const authSlice = createSlice({
         // Auto-set currentOrg to lastActiveOrgId or first org
         const lastId = action.payload.user?.lastActiveOrgId;
         const orgs = action.payload.organizations ?? [];
-        state.currentOrg =
-          orgs.find((o) => o.id === lastId) ?? orgs[0] ?? null;
+        const resolvedOrg = orgs.find((o) => o.id === lastId) ?? orgs[0] ?? null;
+        state.currentOrg = resolvedOrg;
+        persistAuthToStorage({
+          accessToken: action.payload.accessToken,
+          refreshToken: action.payload.refreshToken,
+          user: action.payload.user,
+        });
+        if (resolvedOrg) localStorage.setItem("currentOrg", JSON.stringify(resolvedOrg));
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.isLoading = false;
@@ -179,6 +226,7 @@ const authSlice = createSlice({
         state.organizations = [];
         state.currentOrg = null;
         state.error = null;
+        clearAuthFromStorage();
       });
 
     // ── magic link ──
@@ -207,7 +255,14 @@ const authSlice = createSlice({
         state.refreshToken = action.payload.refreshToken;
         state.organizations = action.payload.organizations ?? [];
         const orgs = action.payload.organizations ?? [];
-        state.currentOrg = orgs[0] ?? null;
+        const resolvedOrg = orgs[0] ?? null;
+        state.currentOrg = resolvedOrg;
+        persistAuthToStorage({
+          accessToken: action.payload.accessToken,
+          refreshToken: action.payload.refreshToken,
+          user: action.payload.user,
+        });
+        if (resolvedOrg) localStorage.setItem("currentOrg", JSON.stringify(resolvedOrg));
       })
       .addCase(verifyMagicLink.rejected, (state, action) => {
         state.isLoading = false;
@@ -218,6 +273,9 @@ const authSlice = createSlice({
     builder
       .addCase(switchOrganization.fulfilled, (state, action) => {
         state.currentOrg = action.payload;
+        if (action.payload) {
+          localStorage.setItem("currentOrg", JSON.stringify(action.payload));
+        }
       });
   },
 });

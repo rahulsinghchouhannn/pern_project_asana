@@ -1,6 +1,17 @@
-import React from "react";
+import { useState, useCallback } from "react";
+import { useAppSelector } from "@/store/hooks";
+import ProfileDropdown, { getAvatarColor, getInitials } from "./ProfileDropdown";
 
 const Navbar = () => {
+  const { user } = useAppSelector((s) => s.auth);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const name = user?.name ?? "";
+  const initials = getInitials(name);
+  const avatarColor = getAvatarColor(name);
+
+  const closeDropdown = useCallback(() => setDropdownOpen(false), []);
+
   return (
     <header
       className="flex items-center gap-3 px-4 h-14 shrink-0 z-10"
@@ -57,13 +68,20 @@ const Navbar = () => {
           </svg>
         </button>
 
-        {/* User avatar */}
-        <button
-          className="w-7 h-7 rounded-full bg-pink-500 flex items-center justify-center text-white text-xs font-semibold hover:ring-2 hover:ring-pink-300 transition-all"
-          aria-label="User profile"
-        >
-          R
-        </button>
+        {/* User avatar + dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setDropdownOpen((prev) => !prev)}
+            aria-label="User menu"
+            aria-expanded={dropdownOpen}
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold hover:ring-2 hover:ring-white/30 transition-all"
+            style={{ backgroundColor: avatarColor }}
+          >
+            {initials}
+          </button>
+
+          {dropdownOpen && <ProfileDropdown onClose={closeDropdown} />}
+        </div>
       </div>
     </header>
   );

@@ -22,7 +22,8 @@ export const getOrgHeader = () => {
 // ─── Request interceptor — attach Bearer token ─────────────────────────────────
 api.interceptors.request.use(
   (config) => {
-    const token = _store?.getState().auth.token;
+    // Fall back to localStorage during the brief hydration window before Redux is populated
+    const token = _store?.getState().auth.token || localStorage.getItem("accessToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -67,7 +68,8 @@ api.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      const refreshToken = _store?.getState().auth.refreshToken;
+      const refreshToken =
+        _store?.getState().auth.refreshToken || localStorage.getItem("refreshToken");
       if (!refreshToken) throw new Error("No refresh token available");
 
       // Use a plain axios call (not api) to avoid interceptor loop
@@ -77,7 +79,7 @@ api.interceptors.response.use(
 
       const { accessToken } = response.data.data;
 
-      // Update token in store
+      // Update token in store (tokenRefreshed reducer also persists to localStorage)
       _store?.dispatch({ type: "auth/tokenRefreshed", payload: accessToken });
 
       processQueue(null, accessToken);
@@ -85,7 +87,7 @@ api.interceptors.response.use(
       return api(originalRequest);
     } catch (refreshError) {
       processQueue(refreshError, null);
-      // Logout user on refresh failure
+      // Logout user on refresh failure (logout reducer clears localStorage)
       _store?.dispatch({ type: "auth/logout" });
       return Promise.reject(refreshError);
     } finally {
