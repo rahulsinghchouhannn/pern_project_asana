@@ -1,8 +1,12 @@
 const express = require("express");
 const projectController = require("../controllers/projectController");
+const roleController = require("../controllers/roleController");
 const { validateRequest } = require("../middleware/validateRequest");
 const authMiddleware = require("../middleware/authMiddleware");
 const { orgMiddleware } = require("../middleware/orgMiddleware");
+const { requirePermission } = require("../services/permissionService");
+const { PERMISSIONS } = require("../config/permissions");
+const { assignRoleSchema } = require("../validators/roleValidator");
 const {
   createProjectSchema,
   updateProjectSchema,
@@ -18,18 +22,26 @@ const router = express.Router();
 router.use(authMiddleware, orgMiddleware);
 
 // ── Project CRUD ──────────────────────────────────────────────────────────────
-router.post("/", validateRequest(createProjectSchema), projectController.create);
+router.post("/", requirePermission(PERMISSIONS.CREATE_PROJECT), validateRequest(createProjectSchema), projectController.create);
 router.get("/", projectController.list);
 router.get("/:id", projectController.getById);
 router.put("/:id", validateRequest(updateProjectSchema), projectController.update);
-router.delete("/:id", projectController.deleteProject);
-router.post("/:id/archive", projectController.archive);
+router.delete("/:id", requirePermission(PERMISSIONS.DELETE_PROJECT), projectController.deleteProject);
+router.post("/:id/archive", requirePermission(PERMISSIONS.ARCHIVE_PROJECT), projectController.archive);
 router.post("/:id/complete", projectController.complete);
 
 // ── Members ───────────────────────────────────────────────────────────────────
 router.get("/:id/members", projectController.getMembers);
 router.post("/:id/members", validateRequest(addMemberSchema), projectController.addMember);
 router.delete("/:id/members/:userId", projectController.removeMember);
+
+// ── Project member role override ──────────────────────────────────────────────
+router.put(
+  "/:projectId/members/:userId/role",
+  requirePermission(PERMISSIONS.MANAGE_PROJECT_MEMBERS),
+  validateRequest(assignRoleSchema),
+  roleController.assignProjectRole
+);
 
 // ── Statuses ──────────────────────────────────────────────────────────────────
 router.get("/:id/statuses", projectController.getStatuses);

@@ -3,6 +3,8 @@ const taskController = require("../controllers/taskController");
 const { validateRequest } = require("../middleware/validateRequest");
 const authMiddleware = require("../middleware/authMiddleware");
 const { orgMiddleware } = require("../middleware/orgMiddleware");
+const { requirePermission } = require("../services/permissionService");
+const { PERMISSIONS } = require("../config/permissions");
 const {
   createTaskSchema,
   taskFilterSchema,
@@ -20,7 +22,7 @@ router.get("/calendar", validateRequest(calendarQuerySchema, "query"), taskContr
 router.get("/timeline", taskController.getTimelineTasks);
 
 // ── Base CRUD ─────────────────────────────────────────────────────────────────
-router.post("/", validateRequest(createTaskSchema), taskController.create);
+router.post("/", requirePermission(PERMISSIONS.CREATE_TASK), validateRequest(createTaskSchema), taskController.create);
 router.get("/", validateRequest(taskFilterSchema, "query"), taskController.listByProject);
 
 module.exports = router;

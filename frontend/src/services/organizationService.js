@@ -27,6 +27,9 @@ const getOrgMembers = async (orgId) =>
     headers: { "x-org-id": orgId },
   });
 
+const removeMember = async (orgId, userId) =>
+  api.delete(`/organizations/${orgId}/members/${userId}`);
+
 export default {
   createOrganization,
   getUserOrganizations,
@@ -35,4 +38,5 @@ export default {
   acceptInvitation,
   rejectInvitation,
   getOrgMembers,
+  removeMember,
 };

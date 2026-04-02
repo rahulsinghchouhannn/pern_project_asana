@@ -5,6 +5,7 @@ import ProjectCard from "@/components/project/ProjectCard";
 import CreateProjectModal from "@/components/project/CreateProjectModal";
 import Button from "@/components/ui/Button";
 import Spinner from "@/components/ui/Spinner";
+import usePermissions from "@/hooks/usePermissions";
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -66,6 +67,7 @@ const ProjectListPage = () => {
   const { projects, isLoading } = useAppSelector((s) => s.projects);
   const { user, currentOrg } = useAppSelector((s) => s.auth);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const { can } = usePermissions();
 
   useEffect(() => {
     if (currentOrg?.id) {
@@ -94,13 +96,15 @@ const ProjectListPage = () => {
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold text-gray-800">Projects</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowCreateModal(true)}
-              >
-                + New project
-              </Button>
+              {can("create_project") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCreateModal(true)}
+                >
+                  + New project
+                </Button>
+              )}
             </div>
 
             {isLoading ? (
@@ -114,15 +118,17 @@ const ProjectListPage = () => {
                 ))}
 
                 {/* Create project card */}
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 p-5 text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors min-h-[96px]"
-                >
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span className="text-sm font-medium">Create project</span>
-                </button>
+                {can("create_project") && (
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 p-5 text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors min-h-[96px]"
+                  >
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span className="text-sm font-medium">Create project</span>
+                  </button>
+                )}
               </div>
             )}
           </div>

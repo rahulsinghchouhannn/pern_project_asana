@@ -2,7 +2,9 @@ const express = require("express");
 const organizationController = require("../controllers/organizationController");
 const { validateRequest } = require("../middleware/validateRequest");
 const authMiddleware = require("../middleware/authMiddleware");
-const { orgMiddleware, requireOrgRole } = require("../middleware/orgMiddleware");
+const { orgMiddleware } = require("../middleware/orgMiddleware");
+const { requirePermission } = require("../services/permissionService");
+const { PERMISSIONS } = require("../config/permissions");
 const {
   createOrgSchema,
   inviteUserSchema,
@@ -25,17 +27,26 @@ router.get("/mine", authMiddleware, organizationController.getUserOrgs);
 // POST /api/organizations/:orgId/switch — switch active org
 router.post("/:orgId/switch", authMiddleware, organizationController.switchOrg);
 
-// POST /api/organizations/:orgId/invite — invite user (owner/admin only)
+// POST /api/organizations/:orgId/invite — invite user
 router.post(
   "/:orgId/invite",
   authMiddleware,
   orgMiddleware,
-  requireOrgRole(["owner", "admin"]),
+  requirePermission(PERMISSIONS.INVITE_USER),
   validateRequest(inviteUserSchema),
   organizationController.inviteUser
 );
 
-// GET /api/organizations/:orgId/members — list members (member+)
+// DELETE /api/organizations/:orgId/members/:userId — remove member
+router.delete(
+  "/:orgId/members/:userId",
+  authMiddleware,
+  orgMiddleware,
+  requirePermission(PERMISSIONS.REMOVE_USER),
+  organizationController.removeMember
+);
+
+// GET /api/organizations/:orgId/members — list members
 router.get(
   "/:orgId/members",
   authMiddleware,

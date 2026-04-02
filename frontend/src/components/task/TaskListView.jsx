@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import taskService from "@/services/taskService";
+import usePermissions from "@/hooks/usePermissions";
 import TaskRow from "./TaskRow";
 import TaskDetailModal from "./TaskDetailModal";
 import CreateTaskModal from "./CreateTaskModal";
@@ -74,6 +75,7 @@ const TaskListView = ({ project, statuses = [], projectMembers = [] }) => {
   const [loading, setLoading] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [createForStatus, setCreateForStatus] = useState(null);
+  const { can } = usePermissions(project?.id);
 
   const loadTasks = useCallback(async () => {
     if (!project?.id) return;
@@ -120,15 +122,17 @@ const TaskListView = ({ project, statuses = [], projectMembers = [] }) => {
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCreateForStatus(statuses[0]?.id ?? null)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add task
-          </button>
+          {can("create_task") && (
+            <button
+              onClick={() => setCreateForStatus(statuses[0]?.id ?? null)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add task
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-1 text-xs text-gray-400">
           <span>{tasks.length} tasks</span>

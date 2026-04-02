@@ -6,12 +6,14 @@ const projectRoutes = require("./projectRoutes");
 const taskRoutes = require("./taskRoutes");
 const projectTaskRoutes = require("./projectTaskRoutes");
 const { projectFieldRouter, taskFieldValueRouter } = require("./customFieldRoutes");
+const roleRoutes = require("./roleRoutes");
 
 const router = express.Router();
 
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
 router.use("/organizations", organizationRoutes);
+router.use("/organizations/:orgId", roleRoutes);
 router.use("/projects", projectRoutes);
 router.use("/projects/:projectId/tasks", projectTaskRoutes);
 router.use("/projects/:projectId/custom-fields", projectFieldRouter);

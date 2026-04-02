@@ -47,4 +47,13 @@ const getMembers = asyncHandler(async (req, res) => {
   res.status(200).json(successResponse(members));
 });
 
-module.exports = { createOrg, getUserOrgs, switchOrg, inviteUser, acceptInvite, rejectInvite, getMembers };
+const removeMember = asyncHandler(async (req, res) => {
+  const result = await organizationService.removeMember(
+    req.params.orgId,
+    req.params.userId,
+    req.user.userId
+  );
+  res.status(200).json(successResponse(result));
+});
+
+module.exports = { createOrg, getUserOrgs, switchOrg, inviteUser, acceptInvite, rejectInvite, getMembers, removeMember };

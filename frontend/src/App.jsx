@@ -13,6 +13,7 @@ import MyTasksPage from "@/pages/MyTasksPage";
 import InboxPage from "@/pages/InboxPage";
 import OrgSelectorPage from "@/pages/OrgSelectorPage";
 import InvitationAcceptPage from "@/pages/InvitationAcceptPage";
+import OrgSettingsPage from "@/pages/OrgSettingsPage";
 
 // ─── Auth guard — redirects unauthenticated users to /login ────────────────────
 const RequireAuth = ({ children, isHydrated }) => {
@@ -93,6 +94,7 @@ const App = () => {
         <Route path="/projects/:id" element={<ProjectPage />} />
         <Route path="/my-tasks" element={<MyTasksPage />} />
         <Route path="/inbox" element={<InboxPage />} />
+        <Route path="/settings/organization" element={<OrgSettingsPage />} />
       </Route>
 
       {/* ── Fallback ───────────────────────────────────────────────────────── */}
