@@ -26,6 +26,118 @@ const PlaceholderView = ({ label }) => (
   </div>
 );
 
+// ─── Overview tab ─────────────────────────────────────────────────────────────
+
+const getInitials = (name = "") =>
+  name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+
+const AVATAR_COLORS_OV = ["#6366F1","#8B5CF6","#EC4899","#F97316","#22C55E","#3B82F6"];
+const getAvatarColorOV = (name = "") => {
+  let h = 0; for (const c of name) h += c.charCodeAt(0);
+  return AVATAR_COLORS_OV[h % AVATAR_COLORS_OV.length];
+};
+
+const STATUS_OPTIONS = [
+  { label: "On track", color: "bg-green-100 text-green-700 border-green-200" },
+  { label: "At risk", color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
+  { label: "Off track", color: "bg-red-100 text-red-700 border-red-200" },
+];
+
+const OverviewTab = ({ project, members, tasks }) => {
+  const [status, setStatus] = useState("On track");
+  const statusConfig = STATUS_OPTIONS.find((s) => s.label === status) ?? STATUS_OPTIONS[0];
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6 max-w-3xl">
+      {/* Project name + description */}
+      <div className="mb-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-1">{project.name}</h2>
+        {project.description ? (
+          <p className="text-sm text-gray-500">{project.description}</p>
+        ) : (
+          <p className="text-sm text-gray-400 italic cursor-pointer hover:text-gray-600">
+            Click to add a description...
+          </p>
+        )}
+      </div>
+
+      {/* Meta row */}
+      <div className="flex flex-wrap items-center gap-4 mb-6 text-sm text-gray-500">
+        <span>
+          Created{" "}
+          {new Date(project.createdAt).toLocaleDateString(undefined, {
+            month: "long", day: "numeric", year: "numeric",
+          })}
+        </span>
+        <span className="text-gray-200">|</span>
+
+        {/* Status selector */}
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">Status:</span>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className={`text-xs font-medium px-2 py-0.5 rounded-full border focus:outline-none ${statusConfig.color}`}
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s.label} value={s.label}>{s.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Members */}
+      <div className="mb-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Members</h3>
+        <div className="flex flex-wrap gap-3">
+          {(members ?? []).map((m) => (
+            <div key={m.userId} className="flex items-center gap-2">
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                style={{ backgroundColor: getAvatarColorOV(m.name ?? "") }}
+              >
+                {getInitials(m.name ?? "")}
+              </div>
+              <span className="text-sm text-gray-600">{m.name}</span>
+            </div>
+          ))}
+          {(members ?? []).length === 0 && (
+            <p className="text-sm text-gray-400">No members yet</p>
+          )}
+        </div>
+      </div>
+
+      {/* Task summary */}
+      <div className="mb-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Tasks</h3>
+        <div className="flex gap-4">
+          <div className="flex flex-col items-center bg-gray-50 rounded-xl border border-gray-200 px-5 py-3">
+            <span className="text-xl font-bold text-gray-800">{tasks.length}</span>
+            <span className="text-xs text-gray-500">Total</span>
+          </div>
+          <div className="flex flex-col items-center bg-green-50 rounded-xl border border-green-100 px-5 py-3">
+            <span className="text-xl font-bold text-green-700">{tasks.filter((t) => t.isCompleted).length}</span>
+            <span className="text-xs text-green-600">Done</span>
+          </div>
+          <div className="flex flex-col items-center bg-red-50 rounded-xl border border-red-100 px-5 py-3">
+            <span className="text-xl font-bold text-red-600">
+              {tasks.filter((t) => !t.isCompleted && t.dueDate && new Date(t.dueDate) < new Date()).length}
+            </span>
+            <span className="text-xs text-red-500">Overdue</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Add a task CTA */}
+      <div className="rounded-xl border-2 border-dashed border-gray-200 hover:border-indigo-300 transition-colors p-4 text-center cursor-pointer">
+        <p className="text-sm text-gray-400 hover:text-indigo-600 transition-colors">
+          + Add a task to get started
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // ─── Filter / Sort / Search toolbar ──────────────────────────────────────────
 
 const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
@@ -319,6 +431,7 @@ const ProjectPage = () => {
       );
     }
     switch (activeTab) {
+      case "overview":  return <OverviewTab project={currentProject} members={members ?? []} tasks={tasks} />;
       case "list":      return <ListView {...sharedProps} />;
       case "board":     return <BoardView {...sharedProps} />;
       case "calendar":  return <CalendarView {...sharedProps} />;

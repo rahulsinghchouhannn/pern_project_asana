@@ -14,7 +14,9 @@
       "Bash(node -e \"require\\('./src/routes/index.js'\\); console.log\\('Routes OK'\\)\")",
       "Bash(node -e \"require\\('./src/services/customFieldService.js'\\); console.log\\('Service OK'\\)\")",
       "Bash(node -e \"require\\('./src/services/taskService.js'\\); console.log\\('TaskService OK'\\)\")",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(git -C /d/pern_doc_3_claude branch -a)",
+      "Bash(git -C /d/pern_doc_3_claude log --oneline Reporting_Dashboard)"
     ]
   }
 }

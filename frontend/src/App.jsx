@@ -6,7 +6,6 @@ import authService from "@/services/authService";
 import useSocket from "@/hooks/useSocket";
 import Spinner from "@/components/ui/Spinner";
 import Layout from "@/components/Layout/Layout";
-import ProjectListPage from "@/pages/ProjectListPage";
 import ProjectPage from "@/pages/ProjectPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
@@ -15,6 +14,12 @@ import InboxPage from "@/pages/InboxPage";
 import OrgSelectorPage from "@/pages/OrgSelectorPage";
 import InvitationAcceptPage from "@/pages/InvitationAcceptPage";
 import OrgSettingsPage from "@/pages/OrgSettingsPage";
+import HomePage from "@/pages/HomePage";
+import ReportingPage from "@/pages/ReportingPage";
+import DashboardDetailPage from "@/pages/DashboardDetailPage";
+import PortfoliosPage from "@/pages/PortfoliosPage";
+import GoalsPage from "@/pages/GoalsPage";
+import OrgWorkspacePage from "@/pages/OrgWorkspacePage";
 
 // ─── Auth guard — redirects unauthenticated users to /login ────────────────────
 const RequireAuth = ({ children, isHydrated }) => {
@@ -92,11 +97,16 @@ const App = () => {
           </RequireOrg>
         }
       >
-        <Route path="/" element={<ProjectListPage />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/projects/:id" element={<ProjectPage />} />
         <Route path="/my-tasks" element={<MyTasksPage />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/settings/organization" element={<OrgSettingsPage />} />
+        <Route path="/reporting" element={<ReportingPage />} />
+        <Route path="/reporting/dashboards/:id" element={<DashboardDetailPage />} />
+        <Route path="/portfolios" element={<PortfoliosPage />} />
+        <Route path="/goals" element={<GoalsPage />} />
+        <Route path="/team" element={<OrgWorkspacePage />} />
       </Route>
 
       {/* ── Fallback ───────────────────────────────────────────────────────── */}
