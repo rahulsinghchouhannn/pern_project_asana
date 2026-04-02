@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import taskService from "@/services/taskService";
 
-const CreateTaskModal = ({ projectId, statuses = [], defaultStatusId, onCreated, onClose }) => {
+const CreateTaskModal = ({ projectId, statuses = [], defaultStatusId, defaultDueDate, onCreated, onClose }) => {
   const [title, setTitle] = useState("");
   const [statusId, setStatusId] = useState(defaultStatusId ?? statuses[0]?.id ?? "");
   const [priority, setPriority] = useState("none");
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState(() => {
+    if (!defaultDueDate) return "";
+    return new Date(defaultDueDate).toISOString().split("T")[0];
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 

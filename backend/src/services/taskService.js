@@ -1,4 +1,4 @@
-const { eq, and, inArray, desc, asc, max, sql, like, count } = require("drizzle-orm");
+const { eq, and, inArray, desc, asc, max, sql, like, count, gte, lte } = require("drizzle-orm");
 const { db } = require("../db");
 const {
   tasks,
@@ -514,6 +514,169 @@ const getMyTasks = async (userId, orgId) => {
   }));
 };
 
+// ─── Board (grouped by status) ────────────────────────────────────────────────
+
+const getBoardTasks = async (projectId) => {
+  const statuses = await db
+    .select()
+    .from(projectStatuses)
+    .where(eq(projectStatuses.projectId, projectId))
+    .orderBy(asc(projectStatuses.position));
+
+  const taskRows = await db
+    .select()
+    .from(tasks)
+    .where(and(eq(tasks.projectId, projectId), sql`${tasks.parentTaskId} IS NULL`))
+    .orderBy(asc(tasks.position), asc(tasks.createdAt));
+
+  if (taskRows.length === 0) {
+    return statuses.map((s) => ({
+      statusId: s.id,
+      statusName: s.name,
+      statusColor: s.color,
+      position: s.position,
+      tasks: [],
+    }));
+  }
+
+  const taskIds = taskRows.map((t) => t.id);
+  const [assigneesMap, tagsMap, subtaskCountMap] = await Promise.all([
+    fetchAssigneesForTasks(taskIds),
+    fetchTagsForTasks(taskIds),
+    fetchSubtaskCountsForTasks(taskIds),
+  ]);
+
+  const enriched = taskRows.map((t) => ({
+    ...t,
+    assignees: assigneesMap[t.id] ?? [],
+    tags: tagsMap[t.id] ?? [],
+    subtaskCount: subtaskCountMap[t.id] ?? 0,
+  }));
+
+  const byStatus = {};
+  enriched.forEach((t) => {
+    if (!byStatus[t.statusId]) byStatus[t.statusId] = [];
+    byStatus[t.statusId].push(t);
+  });
+
+  return statuses.map((s) => ({
+    statusId: s.id,
+    statusName: s.name,
+    statusColor: s.color,
+    position: s.position,
+    tasks: byStatus[s.id] ?? [],
+  }));
+};
+
+// ─── Calendar (tasks by month) ────────────────────────────────────────────────
+
+const getCalendarTasks = async (projectId, year, month) => {
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+
+  const taskRows = await db
+    .select()
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.projectId, projectId),
+        sql`${tasks.parentTaskId} IS NULL`,
+        sql`${tasks.dueDate} IS NOT NULL`,
+        gte(tasks.dueDate, start),
+        lte(tasks.dueDate, end)
+      )
+    )
+    .orderBy(asc(tasks.dueDate), asc(tasks.position));
+
+  if (taskRows.length === 0) return [];
+
+  const taskIds = taskRows.map((t) => t.id);
+  const assigneesMap = await fetchAssigneesForTasks(taskIds);
+
+  return taskRows.map((t) => ({
+    id: t.id,
+    title: t.title,
+    dueDate: t.dueDate,
+    startDate: t.startDate,
+    priority: t.priority,
+    isCompleted: t.isCompleted,
+    statusId: t.statusId,
+    assignees: assigneesMap[t.id] ?? [],
+  }));
+};
+
+// ─── Timeline (tasks with both dates) ────────────────────────────────────────
+
+const getTimelineTasks = async (projectId) => {
+  const taskRows = await db
+    .select()
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.projectId, projectId),
+        sql`${tasks.parentTaskId} IS NULL`,
+        sql`${tasks.startDate} IS NOT NULL`,
+        sql`${tasks.dueDate} IS NOT NULL`
+      )
+    )
+    .orderBy(asc(tasks.startDate), asc(tasks.position));
+
+  if (taskRows.length === 0) return [];
+
+  const taskIds = taskRows.map((t) => t.id);
+  const assigneesMap = await fetchAssigneesForTasks(taskIds);
+
+  return taskRows.map((t) => ({
+    id: t.id,
+    title: t.title,
+    startDate: t.startDate,
+    dueDate: t.dueDate,
+    assignees: assigneesMap[t.id] ?? [],
+    statusId: t.statusId,
+    priority: t.priority,
+  }));
+};
+
+// ─── Update dates (for timeline drag/resize) ──────────────────────────────────
+
+const updateTaskDates = async (taskId, userId, data) => {
+  const [existing] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  throwIf(!existing, "Task not found", 404);
+
+  const updates = { updatedAt: new Date() };
+  const historyInserts = [];
+
+  if (data.startDate !== undefined) {
+    const newDate = data.startDate ? new Date(data.startDate).toISOString() : null;
+    const oldDate = existing.startDate ? existing.startDate.toISOString() : null;
+    if (newDate !== oldDate) {
+      updates.startDate = data.startDate ? new Date(data.startDate) : null;
+      historyInserts.push(insertHistory(taskId, userId, "start_date_changed", oldDate, newDate));
+    }
+  }
+
+  if (data.dueDate !== undefined) {
+    const newDate = data.dueDate ? new Date(data.dueDate).toISOString() : null;
+    const oldDate = existing.dueDate ? existing.dueDate.toISOString() : null;
+    if (newDate !== oldDate) {
+      updates.dueDate = data.dueDate ? new Date(data.dueDate) : null;
+      historyInserts.push(insertHistory(taskId, userId, "due_date_changed", oldDate, newDate));
+    }
+  }
+
+  if (Object.keys(updates).length > 1) {
+    await db.update(tasks).set(updates).where(eq(tasks.id, taskId));
+  }
+
+  if (historyInserts.length > 0) await Promise.all(historyInserts);
+
+  return {
+    id: taskId,
+    startDate: updates.startDate !== undefined ? updates.startDate : existing.startDate,
+    dueDate: updates.dueDate !== undefined ? updates.dueDate : existing.dueDate,
+  };
+};
+
 module.exports = {
   createTask,
   getProjectTasks,
@@ -529,4 +692,8 @@ module.exports = {
   getSubtasks,
   getTaskHistory,
   getMyTasks,
+  getBoardTasks,
+  getCalendarTasks,
+  getTimelineTasks,
+  updateTaskDates,
 };

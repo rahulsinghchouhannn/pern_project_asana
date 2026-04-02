@@ -48,6 +48,22 @@ const taskService = {
   // ── My Tasks ─────────────────────────────────────────────────────────────
   getMyTasks: () =>
     api.get(`/tasks/my`, { headers: getOrgHeader() }),
+
+  // ── View-specific endpoints ───────────────────────────────────────────────
+  getBoardTasks: (projectId) =>
+    api.get(`/projects/${projectId}/tasks/board`, { headers: getOrgHeader() }),
+
+  getCalendarTasks: (projectId, year, month) =>
+    api.get(`/projects/${projectId}/tasks/calendar`, {
+      headers: getOrgHeader(),
+      params: { year, month },
+    }),
+
+  getTimelineTasks: (projectId) =>
+    api.get(`/projects/${projectId}/tasks/timeline`, { headers: getOrgHeader() }),
+
+  updateTaskDates: (taskId, data) =>
+    api.patch(`/tasks/${taskId}/dates`, data, { headers: getOrgHeader() }),
 };
 
 export default taskService;

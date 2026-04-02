@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@hello-pangea/dnd": "^18.0.1",
     "@reduxjs/toolkit": "^2.2.3",
     "@remix-run/router": "^1.23.2",
     "axios": "^1.6.8",

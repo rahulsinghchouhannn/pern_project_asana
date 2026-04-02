@@ -78,6 +78,22 @@ const bulkUpdatePositionsSchema = z.object({
     .min(1),
 });
 
+const calendarQuerySchema = z.object({
+  year: z
+    .string()
+    .transform((v) => parseInt(v, 10))
+    .pipe(z.number().int().min(2000).max(2100)),
+  month: z
+    .string()
+    .transform((v) => parseInt(v, 10))
+    .pipe(z.number().int().min(1).max(12)),
+});
+
+const updateDatesSchema = z.object({
+  startDate: z.string().datetime({ offset: true }).optional().nullable(),
+  dueDate: z.string().datetime({ offset: true }).optional().nullable(),
+});
+
 module.exports = {
   createTaskSchema,
   updateTaskSchema,
@@ -85,4 +101,6 @@ module.exports = {
   taskFilterSchema,
   updatePositionSchema,
   bulkUpdatePositionsSchema,
+  calendarQuerySchema,
+  updateDatesSchema,
 };

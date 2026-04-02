@@ -10,6 +10,7 @@ const {
   taskFilterSchema,
   updatePositionSchema,
   bulkUpdatePositionsSchema,
+  updateDatesSchema,
 } = require("../validators/taskValidator");
 
 const router = express.Router({ mergeParams: true });
@@ -39,8 +40,9 @@ router.post("/:id/reopen", taskController.reopen);
 router.post("/:id/assignees", validateRequest(assigneeSchema), taskController.addAssignee);
 router.delete("/:id/assignees/:userId", taskController.removeAssignee);
 
-// ── Position ──────────────────────────────────────────────────────────────────
+// ── Position / Dates ─────────────────────────────────────────────────────────
 router.patch("/:id/position", validateRequest(updatePositionSchema), taskController.updatePosition);
+router.patch("/:id/dates", validateRequest(updateDatesSchema), taskController.updateTaskDates);
 
 // ── Subtasks / History ────────────────────────────────────────────────────────
 router.get("/:id/subtasks", taskController.getSubtasks);

@@ -89,6 +89,27 @@ const getMyTasks = asyncHandler(async (req, res) => {
   res.status(200).json(successResponse(tasks));
 });
 
+const getBoardTasks = asyncHandler(async (req, res) => {
+  const columns = await taskService.getBoardTasks(req.params.projectId);
+  res.status(200).json(successResponse(columns));
+});
+
+const getCalendarTasks = asyncHandler(async (req, res) => {
+  const { year, month } = req.validated;
+  const tasks = await taskService.getCalendarTasks(req.params.projectId, year, month);
+  res.status(200).json(successResponse(tasks));
+});
+
+const getTimelineTasks = asyncHandler(async (req, res) => {
+  const tasks = await taskService.getTimelineTasks(req.params.projectId);
+  res.status(200).json(successResponse(tasks));
+});
+
+const updateTaskDates = asyncHandler(async (req, res) => {
+  const result = await taskService.updateTaskDates(req.params.id, req.user.userId, req.validated);
+  res.status(200).json(successResponse(result));
+});
+
 module.exports = {
   create,
   listByProject,
@@ -104,4 +125,8 @@ module.exports = {
   getSubtasks,
   getHistory,
   getMyTasks,
+  getBoardTasks,
+  getCalendarTasks,
+  getTimelineTasks,
+  updateTaskDates,
 };
