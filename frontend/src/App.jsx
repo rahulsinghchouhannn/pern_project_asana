@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { logout } from "@/store/slices/authSlice";
 import authService from "@/services/authService";
+import useSocket from "@/hooks/useSocket";
 import Spinner from "@/components/ui/Spinner";
 import Layout from "@/components/Layout/Layout";
 import ProjectListPage from "@/pages/ProjectListPage";
@@ -38,6 +39,7 @@ const RequireOrg = ({ children, isHydrated }) => {
 const App = () => {
   const [isHydrated, setIsHydrated] = useState(false);
   const dispatch = useAppDispatch();
+  useSocket();
 
   useEffect(() => {
     const savedToken = localStorage.getItem("accessToken");

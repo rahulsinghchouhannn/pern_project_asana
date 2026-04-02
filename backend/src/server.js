@@ -1,7 +1,9 @@
 require("dotenv").config();
+const http = require("http");
 const app = require("./app");
 const logger = require("./config/logger");
 const { pool } = require("./db");
+const { initSocket } = require("./config/socket");
 
 const PORT = process.env.PORT || 5000;
 
@@ -11,7 +13,10 @@ const startServer = async () => {
     client.release();
     logger.info("Database connection established");
 
-    app.listen(PORT, () => {
+    const httpServer = http.createServer(app);
+    initSocket(httpServer);
+
+    httpServer.listen(PORT, () => {
       logger.info(
         `Asana API server running on port ${PORT} in ${process.env.NODE_ENV || "development"} mode`
       );

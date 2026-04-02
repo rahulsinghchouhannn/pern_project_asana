@@ -3,6 +3,7 @@ import CommentItem from "./CommentItem";
 import CommentBox from "./CommentBox";
 import commentService from "@/services/commentService";
 import activityService from "@/services/activityService";
+import socketService from "@/services/socketService";
 
 const relativeTime = (dateStr) => {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -51,6 +52,16 @@ const ActivityFeed = ({ taskId, projectMembers = [], currentUserId }) => {
   useEffect(() => {
     fetchActivity();
   }, [fetchActivity]);
+
+  // Append new comments in real-time when this task's modal is open
+  useEffect(() => {
+    if (!taskId) return;
+    const handler = (comment) => {
+      if (comment.taskId === taskId) fetchActivity();
+    };
+    socketService.on("comment:added", handler);
+    return () => socketService.off("comment:added", handler);
+  }, [taskId, fetchActivity]);
 
   const handleSubmitComment = async (content) => {
     setSubmitting(true);

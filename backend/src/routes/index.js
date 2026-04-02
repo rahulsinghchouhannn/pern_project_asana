@@ -8,6 +8,7 @@ const projectTaskRoutes = require("./projectTaskRoutes");
 const { projectFieldRouter, taskFieldValueRouter } = require("./customFieldRoutes");
 const roleRoutes = require("./roleRoutes");
 const commentRoutes = require("./commentRoutes");
+const notificationRoutes = require("./notificationRoutes");
 
 const router = express.Router();
 
@@ -21,5 +22,6 @@ router.use("/projects/:projectId/custom-fields", projectFieldRouter);
 router.use("/tasks", taskRoutes);
 router.use("/tasks/:taskId/custom-field-values", taskFieldValueRouter);
 router.use("/", commentRoutes);
+router.use("/notifications", notificationRoutes);
 
 module.exports = router;

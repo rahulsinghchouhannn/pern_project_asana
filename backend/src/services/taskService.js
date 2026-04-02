@@ -11,6 +11,8 @@ const {
 } = require("../db/schema");
 const { getBulkTaskFieldValues, getTaskFieldValues } = require("./customFieldService");
 const activityService = require("./activityService");
+const notificationService = require("./notificationService");
+const { emitToProject } = require("../config/socket");
 const logger = require("../config/logger");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -160,7 +162,9 @@ const createTask = async (projectId, orgId, creatorId, data) => {
 
   logger.info({ message: "Task created", taskId: task.id, projectId, creatorId });
 
-  return getTaskById(task.id);
+  const fullTask = await getTaskById(task.id);
+  emitToProject(projectId, "task:created", fullTask);
+  return fullTask;
 };
 
 // ─── List by project ──────────────────────────────────────────────────────────
@@ -330,15 +334,15 @@ const updateTask = async (taskId, userId, data) => {
     updates.statusId = data.statusId;
     historyInserts.push(insertHistory(taskId, userId, "status_changed", existing.statusId, data.statusId));
 
-    // Log activity with status names (fire-and-forget after async lookup)
+    // Log activity + notify assignees + emit socket (fire-and-forget)
     db
       .select({ id: projectStatuses.id, name: projectStatuses.name })
       .from(projectStatuses)
       .where(inArray(projectStatuses.id, [existing.statusId, data.statusId]))
-      .then((statusRows) => {
+      .then(async (statusRows) => {
         const nameMap = {};
         statusRows.forEach((r) => { nameMap[r.id] = r.name; });
-        return activityService.log({
+        await activityService.log({
           orgId: existing.organizationId,
           projectId: existing.projectId,
           taskId,
@@ -346,8 +350,34 @@ const updateTask = async (taskId, userId, data) => {
           action: "status_changed",
           metadata: { from: nameMap[existing.statusId] ?? existing.statusId, to: nameMap[data.statusId] ?? data.statusId },
         });
+
+        // Notify all assignees except the actor
+        const assigneeRows = await db
+          .select({ userId: taskAssignees.userId })
+          .from(taskAssignees)
+          .where(eq(taskAssignees.taskId, taskId));
+
+        const recipients = assigneeRows.map((r) => r.userId).filter((id) => id !== userId);
+        if (recipients.length > 0) {
+          await notificationService.createBulk(recipients, {
+            actorId: userId,
+            orgId: existing.organizationId,
+            type: "status_changed",
+            title: `Status changed on "${existing.title}"`,
+            entityType: "task",
+            entityId: taskId,
+          });
+        }
+
+        // Emit to project room
+        emitToProject(existing.projectId, "task:updated", {
+          taskId,
+          statusId: data.statusId,
+          position: data.position ?? existing.position,
+          actorId: userId,
+        });
       })
-      .catch((err) => logger.error({ message: "Failed to log status_changed", err }));
+      .catch((err) => logger.error({ message: "Failed to handle status_changed side effects", err }));
   }
   if (data.priority !== undefined && data.priority !== existing.priority) {
     updates.priority = data.priority;
@@ -439,32 +469,43 @@ const addAssignee = async (taskId, userId, assignedBy) => {
   await db.insert(taskAssignees).values({ taskId, userId, assignedBy });
   await insertHistory(taskId, assignedBy, "assigned", null, userId);
 
-  // Log activity with assignee name (fire-and-forget after lookup)
+  // Log activity + notify assignee (fire-and-forget)
   db
-    .select({ id: users.id, name: users.name })
-    .from(users)
-    .where(eq(users.id, userId))
+    .select({ id: tasks.id, title: tasks.title, organizationId: tasks.organizationId, projectId: tasks.projectId })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
     .limit(1)
-    .then(([assignee]) => {
-      const taskRow = db
-        .select({ orgId: tasks.organizationId, projectId: tasks.projectId })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1)
-        .then(([t]) => {
-          if (!t) return;
-          return activityService.log({
-            orgId: t.orgId,
-            projectId: t.projectId,
-            taskId,
-            actorId: assignedBy,
-            action: "task_assigned",
-            metadata: { assigneeName: assignee?.name ?? userId },
-          });
+    .then(async ([t]) => {
+      if (!t) return;
+      const [assignee] = await db
+        .select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      await activityService.log({
+        orgId: t.organizationId,
+        projectId: t.projectId,
+        taskId,
+        actorId: assignedBy,
+        action: "task_assigned",
+        metadata: { assigneeName: assignee?.name ?? userId },
+      });
+
+      // Notify the assigned user (skip if they assigned themselves)
+      if (userId !== assignedBy) {
+        await notificationService.create({
+          recipientId: userId,
+          actorId: assignedBy,
+          orgId: t.organizationId,
+          type: "task_assigned",
+          title: `You were assigned to "${t.title}"`,
+          entityType: "task",
+          entityId: taskId,
         });
-      return taskRow;
+      }
     })
-    .catch((err) => logger.error({ message: "Failed to log task_assigned", err }));
+    .catch((err) => logger.error({ message: "Failed to handle task_assigned side effects", err }));
 
   return getTaskById(taskId);
 };

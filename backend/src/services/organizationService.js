@@ -4,6 +4,7 @@ const { db } = require("../db");
 const { organizations, organizationMembers, invitations, users, roles, rolePermissions, userRoles } = require("../db/schema");
 const { ALL_PERMISSIONS, ADMIN_PERMISSIONS, MEMBER_PERMISSIONS } = require("../config/permissions");
 const activityService = require("./activityService");
+const notificationService = require("./notificationService");
 const logger = require("../config/logger");
 
 // ─── System role seeding ──────────────────────────────────────────────────────
@@ -216,6 +217,16 @@ const acceptInvitation = async (token, userId) => {
     actorId: userId,
     action: "member_joined",
   }).catch((err) => logger.error({ message: "Failed to log member_joined", err }));
+
+  notificationService.create({
+    recipientId: userId,
+    actorId: invitation.invitedBy,
+    orgId: invitation.organizationId,
+    type: "invitation",
+    title: "You joined a new organization",
+    entityType: "project",
+    entityId: null,
+  }).catch((err) => logger.error({ message: "Failed to create invitation notification", err }));
 
   logger.info({ message: "Invitation accepted", orgId: invitation.organizationId, userId });
 

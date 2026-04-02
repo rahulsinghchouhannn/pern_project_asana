@@ -21,6 +21,7 @@ const { comments } = require("./comments");
 const { commentMentions } = require("./commentMentions");
 const { activityLogs } = require("./activityLogs");
 const { userActivityRead } = require("./userActivityRead");
+const { notifications } = require("./notifications");
 
 module.exports = {
   users,
@@ -46,4 +47,5 @@ module.exports = {
   commentMentions,
   activityLogs,
   userActivityRead,
+  notifications,
 };

@@ -43,6 +43,13 @@
       "when": 1775129300373,
       "tag": "0005_outstanding_lady_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775131125723,
+      "tag": "0006_lovely_lady_deathstrike",
+      "breakpoints": true
     }
   ]
 }

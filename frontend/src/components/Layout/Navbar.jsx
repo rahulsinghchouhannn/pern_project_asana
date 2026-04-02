@@ -1,16 +1,20 @@
 import { useState, useCallback } from "react";
 import { useAppSelector } from "@/store/hooks";
 import ProfileDropdown, { getAvatarColor, getInitials } from "./ProfileDropdown";
+import NotificationPanel from "@/components/notifications/NotificationPanel";
 
 const Navbar = () => {
   const { user } = useAppSelector((s) => s.auth);
+  const { unreadCount } = useAppSelector((s) => s.app);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   const name = user?.name ?? "";
   const initials = getInitials(name);
   const avatarColor = getAvatarColor(name);
 
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
+  const closeNotif = useCallback(() => setNotifOpen(false), []);
 
   return (
     <header
@@ -54,12 +58,24 @@ const Navbar = () => {
 
       {/* Right actions */}
       <div className="flex items-center gap-2 shrink-0">
-        {/* Notifications */}
-        <button className="p-1.5 rounded hover:bg-[#3A3A3A] text-gray-400 hover:text-gray-200 transition-colors" aria-label="Notifications">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0h6z" />
-          </svg>
-        </button>
+        {/* Notifications bell */}
+        <div className="relative">
+          <button
+            onClick={() => setNotifOpen((prev) => !prev)}
+            className="relative p-1.5 rounded hover:bg-[#3A3A3A] text-gray-400 hover:text-gray-200 transition-colors"
+            aria-label="Notifications"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0h6z" />
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-0.5 flex items-center justify-center text-[10px] font-bold bg-red-500 text-white rounded-full">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </button>
+          {notifOpen && <NotificationPanel onClose={closeNotif} />}
+        </div>
 
         {/* Help */}
         <button className="p-1.5 rounded hover:bg-[#3A3A3A] text-gray-400 hover:text-gray-200 transition-colors" aria-label="Help">

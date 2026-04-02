@@ -1,7 +1,9 @@
 const { eq, and, asc } = require("drizzle-orm");
 const { db } = require("../db");
-const { comments, commentMentions, users } = require("../db/schema");
+const { comments, commentMentions, users, tasks, taskAssignees } = require("../db/schema");
 const activityService = require("./activityService");
+const notificationService = require("./notificationService");
+const { emitToProject } = require("../config/socket");
 const logger = require("../config/logger");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -71,9 +73,70 @@ const createComment = async (taskId, authorId, orgId, content) => {
     .log({ orgId, taskId, actorId: authorId, action: "comment_added" })
     .catch((err) => logger.error({ message: "Failed to log comment_added activity", err }));
 
+  // Notifications + socket emission (fire-and-forget)
+  const commentData = await getCommentWithAuthor(comment.id);
+  ;(async () => {
+    try {
+      const [taskRow] = await db
+        .select({ title: tasks.title, projectId: tasks.projectId })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1);
+      if (!taskRow) return;
+
+      const [author] = await db
+        .select({ name: users.name })
+        .from(users)
+        .where(eq(users.id, authorId))
+        .limit(1);
+      const authorName = author?.name ?? "Someone";
+
+      // Notify assignees (except comment author)
+      const assigneeRows = await db
+        .select({ userId: taskAssignees.userId })
+        .from(taskAssignees)
+        .where(eq(taskAssignees.taskId, taskId));
+
+      const assigneeRecipients = assigneeRows.map((r) => r.userId).filter((id) => id !== authorId);
+      if (assigneeRecipients.length > 0) {
+        await notificationService.createBulk(assigneeRecipients, {
+          actorId: authorId,
+          orgId,
+          type: "comment_added",
+          title: `${authorName} commented on "${taskRow.title}"`,
+          entityType: "task",
+          entityId: taskId,
+        });
+      }
+
+      // Notify mentioned users (except author, and avoid duplicate if already notified as assignee)
+      if (mentions.length > 0) {
+        const notifiedSet = new Set(assigneeRecipients);
+        const mentionRecipients = mentions
+          .map((m) => m.userId)
+          .filter((id) => id !== authorId && !notifiedSet.has(id));
+        if (mentionRecipients.length > 0) {
+          await notificationService.createBulk(mentionRecipients, {
+            actorId: authorId,
+            orgId,
+            type: "mentioned",
+            title: `${authorName} mentioned you in "${taskRow.title}"`,
+            entityType: "task",
+            entityId: taskId,
+          });
+        }
+      }
+
+      // Emit to project room
+      emitToProject(taskRow.projectId, "comment:added", commentData);
+    } catch (err) {
+      logger.error({ message: "Failed to send comment notifications", err });
+    }
+  })();
+
   logger.info({ message: "Comment created", commentId: comment.id, taskId, authorId });
 
-  return getCommentWithAuthor(comment.id);
+  return commentData;
 };
 
 // ─── Get task comments ────────────────────────────────────────────────────────
