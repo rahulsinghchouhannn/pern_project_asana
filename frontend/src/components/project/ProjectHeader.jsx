@@ -37,7 +37,7 @@ const AvatarStack = ({ members }) => {
   );
 };
 
-const ProjectHeader = ({ project, members = [], activeTab, onTabChange, tabs = [] }) => {
+const ProjectHeader = ({ project, members = [], activeTab, onTabChange, tabs = [], onCustomize }) => {
   const isArchived = project.isArchived;
   const isCompleted = project.isCompleted;
 
@@ -83,7 +83,7 @@ const ProjectHeader = ({ project, members = [], activeTab, onTabChange, tabs = [
             <ShareIcon />
             Share
           </Button>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={onCustomize}>
             Customize
           </Button>
         </div>

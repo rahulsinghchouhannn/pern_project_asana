@@ -13,6 +13,7 @@ import CalendarView from "@/components/task/views/CalendarView";
 import TimelineView from "@/components/task/views/TimelineView";
 import Spinner from "@/components/ui/Spinner";
 import taskService from "@/services/taskService";
+import CustomFieldsManager from "@/components/customFields/CustomFieldsManager";
 
 // ─── Placeholder ──────────────────────────────────────────────────────────────
 
@@ -179,6 +180,7 @@ const ProjectPage = () => {
 
   const defaultView = currentProject?.defaultView ?? "list";
   const [activeTab, setActiveTab] = useState(defaultView);
+  const [showCustomizeFields, setShowCustomizeFields] = useState(false);
 
   // ── Task state ─────────────────────────────────────────────────────────────
   const [tasks, setTasks] = useState([]);
@@ -348,7 +350,15 @@ const ProjectPage = () => {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         tabs={TABS}
+        onCustomize={() => setShowCustomizeFields(true)}
       />
+
+      {showCustomizeFields && (
+        <CustomFieldsManager
+          projectId={id}
+          onClose={() => setShowCustomizeFields(false)}
+        />
+      )}
 
       {/* View toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 flex-shrink-0">

@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import taskService from "@/services/taskService";
+import customFieldService from "@/services/customFieldService";
 import TaskPriorityBadge from "./TaskPriorityBadge";
+import CustomFieldValue from "@/components/customFields/CustomFieldValue";
 
 const PRIORITIES = ["none", "low", "medium", "high", "urgent"];
 
@@ -31,23 +33,53 @@ const useDebounce = (fn, delay) => {
   );
 };
 
-const TaskDetailModal = ({ taskId, statuses = [], projectMembers = [], onClose, onUpdated }) => {
+const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = [], onClose, onUpdated }) => {
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showSubtasks, setShowSubtasks] = useState(true);
   const [addAssigneeId, setAddAssigneeId] = useState("");
+  const [customFields, setCustomFields] = useState([]);
+  // Map: fieldId → current value row (from task.customFieldValues)
+  const [fieldValues, setFieldValues] = useState({});
 
   useEffect(() => {
     if (!taskId) return;
     setLoading(true);
     taskService
       .getTaskById(taskId)
-      .then((res) => setTask(res.data.data))
+      .then((res) => {
+        const t = res.data.data;
+        setTask(t);
+        // Index existing values by fieldId
+        const map = {};
+        (t.customFieldValues ?? []).forEach((v) => { map[v.customFieldId] = v; });
+        setFieldValues(map);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [taskId]);
+
+  // Load project's custom fields
+  useEffect(() => {
+    const pid = projectId ?? task?.projectId;
+    if (!pid) return;
+    customFieldService
+      .getProjectFields(pid)
+      .then((res) => setCustomFields(res.data.data ?? []))
+      .catch(console.error);
+  }, [projectId, task?.projectId]);
+
+  const handleCustomFieldChange = async (fieldId, valueData) => {
+    try {
+      const res = await customFieldService.setTaskFieldValue(taskId, fieldId, valueData);
+      const updated = res.data.data;
+      setFieldValues((prev) => ({ ...prev, [fieldId]: updated }));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const save = async (patch) => {
     if (!task) return;
@@ -283,6 +315,26 @@ const TaskDetailModal = ({ taskId, statuses = [], projectMembers = [], onClose, 
                 </div>
               )}
             </div>
+
+            {/* Custom fields */}
+            {customFields.length > 0 && (
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Custom fields</label>
+                <div className="mt-2 space-y-2">
+                  {customFields.map((field) => (
+                    <div key={field.id} className="grid grid-cols-2 gap-2 items-center">
+                      <span className="text-xs text-gray-600 font-medium truncate">{field.name}</span>
+                      <CustomFieldValue
+                        field={field}
+                        value={fieldValues[field.id]}
+                        onChange={handleCustomFieldChange}
+                        projectMembers={projectMembers}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Tags */}
             {task.tags?.length > 0 && (

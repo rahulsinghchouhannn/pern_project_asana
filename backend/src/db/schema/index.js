@@ -11,6 +11,8 @@ const { taskAssignees } = require("./taskAssignees");
 const { taskTags } = require("./taskTags");
 const { taskHistory } = require("./taskHistory");
 const { taskAttachments } = require("./taskAttachments");
+const { customFields } = require("./customFields");
+const { customFieldValues } = require("./customFieldValues");
 
 module.exports = {
   users,
@@ -26,4 +28,6 @@ module.exports = {
   taskTags,
   taskHistory,
   taskAttachments,
+  customFields,
+  customFieldValues,
 };

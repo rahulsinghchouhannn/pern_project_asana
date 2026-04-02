@@ -13,7 +13,43 @@ const AvatarIcon = () => (
   </svg>
 );
 
-const TaskRow = ({ task, statuses = [], onClick }) => {
+const renderFieldValue = (field, value) => {
+  if (!value) return <span className="text-gray-300">—</span>;
+  switch (field.type) {
+    case "text":
+      return <span className="truncate max-w-[100px] block">{value.valueText ?? "—"}</span>;
+    case "number":
+      return <span>{value.valueNumber ?? "—"}</span>;
+    case "date":
+      return (
+        <span>
+          {value.valueDate
+            ? new Date(value.valueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+            : "—"}
+        </span>
+      );
+    case "dropdown": {
+      if (!value.valueOption) return <span className="text-gray-300">—</span>;
+      const options = field.options ?? [];
+      const opt = options.find((o) => o.value === value.valueOption);
+      return (
+        <span
+          className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium"
+          style={{
+            backgroundColor: opt?.color ? opt.color + "22" : "#e5e7eb",
+            color: opt?.color ?? "#6b7280",
+          }}
+        >
+          {value.valueOption}
+        </span>
+      );
+    }
+    default:
+      return <span className="text-gray-300">—</span>;
+  }
+};
+
+const TaskRow = ({ task, statuses = [], customFields = [], visibleFieldIds = [], onClick }) => {
   const status = statuses.find((s) => s.id === task.statusId);
   const hasAssignees = task.assignees?.length > 0;
   const dateLabel =
@@ -126,6 +162,18 @@ const TaskRow = ({ task, statuses = [], onClick }) => {
           </span>
         )}
       </td>
+
+      {/* Custom field columns */}
+      {visibleFieldIds.map((fieldId) => {
+        const field = customFields.find((f) => f.id === fieldId);
+        if (!field) return <td key={fieldId} className="py-2 px-2 w-28" />;
+        const value = (task.customFieldValues ?? []).find((v) => v.customFieldId === fieldId);
+        return (
+          <td key={fieldId} className="py-2 px-2 w-28 text-xs text-gray-600">
+            {renderFieldValue(field, value)}
+          </td>
+        );
+      })}
     </tr>
   );
 };

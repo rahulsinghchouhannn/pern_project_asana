@@ -174,6 +174,7 @@ const BoardView = ({
       {selectedTaskId && (
         <TaskDetailModal
           taskId={selectedTaskId}
+          projectId={projectId}
           statuses={statuses}
           projectMembers={projectMembers}
           onClose={() => setSelectedTaskId(null)}

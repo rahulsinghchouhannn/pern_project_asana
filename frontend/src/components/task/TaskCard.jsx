@@ -41,6 +41,59 @@ const TaskCard = React.forwardRef(({ task, onClick, dragHandleProps, draggablePr
         {task.title}
       </p>
 
+      {/* Custom field values (first 2 with a value) */}
+      {(() => {
+        const values = (task.customFieldValues ?? []).filter((v) =>
+          v.valueText != null || v.valueNumber != null || v.valueDate != null ||
+          v.valueUserId != null || v.valueOption != null
+        ).slice(0, 2);
+        if (values.length === 0) return null;
+        return (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {values.map((v) => {
+              if (v.valueOption) {
+                const options = v.fieldOptions ?? [];
+                const opt = options.find((o) => o.value === v.valueOption);
+                return (
+                  <span
+                    key={v.customFieldId}
+                    className="text-xs px-1.5 py-0.5 rounded font-medium"
+                    style={{
+                      backgroundColor: opt?.color ? opt.color + "22" : "#e5e7eb",
+                      color: opt?.color ?? "#6b7280",
+                    }}
+                  >
+                    {v.fieldName}: {v.valueOption}
+                  </span>
+                );
+              }
+              if (v.valueNumber != null) {
+                return (
+                  <span key={v.customFieldId} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                    {v.fieldName}: {v.valueNumber}
+                  </span>
+                );
+              }
+              if (v.valueDate) {
+                return (
+                  <span key={v.customFieldId} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                    {v.fieldName}: {new Date(v.valueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                );
+              }
+              if (v.valueText) {
+                return (
+                  <span key={v.customFieldId} className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 truncate max-w-28">
+                    {v.fieldName}: {v.valueText}
+                  </span>
+                );
+              }
+              return null;
+            })}
+          </div>
+        );
+      })()}
+
       {/* Footer row */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2">

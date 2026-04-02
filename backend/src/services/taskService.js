@@ -9,6 +9,7 @@ const {
   users,
   projectStatuses,
 } = require("../db/schema");
+const { getBulkTaskFieldValues, getTaskFieldValues } = require("./customFieldService");
 const logger = require("../config/logger");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -193,10 +194,11 @@ const getProjectTasks = async (projectId, filters = {}) => {
   if (taskRows.length === 0) return [];
 
   const taskIds = taskRows.map((t) => t.id);
-  const [assigneesMap, tagsMap, subtaskCountMap] = await Promise.all([
+  const [assigneesMap, tagsMap, subtaskCountMap, customFieldValuesMap] = await Promise.all([
     fetchAssigneesForTasks(taskIds),
     fetchTagsForTasks(taskIds),
     fetchSubtaskCountsForTasks(taskIds),
+    getBulkTaskFieldValues(taskIds),
   ]);
 
   return taskRows.map((t) => ({
@@ -204,6 +206,7 @@ const getProjectTasks = async (projectId, filters = {}) => {
     assignees: assigneesMap[t.id] ?? [],
     tags: tagsMap[t.id] ?? [],
     subtaskCount: subtaskCountMap[t.id] ?? 0,
+    customFieldValues: customFieldValuesMap[t.id] ?? [],
   }));
 };
 
@@ -218,7 +221,7 @@ const getTaskById = async (taskId) => {
 
   throwIf(!task, "Task not found", 404);
 
-  const [assignees, tags, subtaskRows, history, attachments] = await Promise.all([
+  const [assignees, tags, subtaskRows, history, attachments, customFieldValuesRows] = await Promise.all([
     db
       .select({
         userId: users.id,
@@ -267,6 +270,8 @@ const getTaskById = async (taskId) => {
       .from(taskAttachments)
       .where(eq(taskAttachments.taskId, taskId))
       .limit(50),
+
+    getTaskFieldValues(taskId),
   ]);
 
   return {
@@ -276,6 +281,7 @@ const getTaskById = async (taskId) => {
     subtasks: subtaskRows,
     history,
     attachments,
+    customFieldValues: customFieldValuesRows,
   };
 };
 
@@ -540,10 +546,11 @@ const getBoardTasks = async (projectId) => {
   }
 
   const taskIds = taskRows.map((t) => t.id);
-  const [assigneesMap, tagsMap, subtaskCountMap] = await Promise.all([
+  const [assigneesMap, tagsMap, subtaskCountMap, customFieldValuesMap] = await Promise.all([
     fetchAssigneesForTasks(taskIds),
     fetchTagsForTasks(taskIds),
     fetchSubtaskCountsForTasks(taskIds),
+    getBulkTaskFieldValues(taskIds),
   ]);
 
   const enriched = taskRows.map((t) => ({
@@ -551,6 +558,7 @@ const getBoardTasks = async (projectId) => {
     assignees: assigneesMap[t.id] ?? [],
     tags: tagsMap[t.id] ?? [],
     subtaskCount: subtaskCountMap[t.id] ?? 0,
+    customFieldValues: customFieldValuesMap[t.id] ?? [],
   }));
 
   const byStatus = {};
