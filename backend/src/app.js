@@ -2,7 +2,6 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
 const requestLogger = require("./middleware/requestLogger");
 const errorHandler = require("./middleware/errorHandler");
 const routes = require("./routes");
@@ -16,13 +15,6 @@ app.use(
     credentials: true,
   })
 );
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: "Too many requests from this IP, please try again later.",
-});
-app.use("/api", limiter);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

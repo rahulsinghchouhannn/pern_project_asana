@@ -1,10 +1,4 @@
-import api from "./api";
-import { store } from "@/store";
-
-const getOrgHeader = () => {
-  const orgId = store.getState().auth.currentOrg?.id;
-  return orgId ? { "x-org-id": orgId } : {};
-};
+import api, { getOrgHeader } from "./api";
 
 const projectService = {
   createProject: (data) =>

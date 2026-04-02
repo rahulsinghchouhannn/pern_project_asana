@@ -14,6 +14,11 @@ export const injectStore = (store) => {
   _store = store;
 };
 
+export const getOrgHeader = () => {
+  const orgId = _store?.getState().auth.currentOrg?.id;
+  return orgId ? { "x-org-id": orgId } : {};
+};
+
 // ─── Request interceptor — attach Bearer token ─────────────────────────────────
 api.interceptors.request.use(
   (config) => {

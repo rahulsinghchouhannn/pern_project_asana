@@ -15,6 +15,13 @@
       "when": 1775112121831,
       "tag": "0001_sturdy_bucky",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775113596469,
+      "tag": "0002_concerned_black_cat",
+      "breakpoints": true
     }
   ]
 }

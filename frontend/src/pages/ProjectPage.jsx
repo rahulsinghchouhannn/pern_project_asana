@@ -7,9 +7,10 @@ import {
   clearCurrentProject,
 } from "@/store/slices/projectSlice";
 import ProjectHeader from "@/components/project/ProjectHeader";
+import TaskListView from "@/components/task/TaskListView";
 import Spinner from "@/components/ui/Spinner";
 
-// ─── Placeholder view components ─────────────────────────────────────────────
+// ─── Placeholder view ─────────────────────────────────────────────────────────
 
 const PlaceholderView = ({ label }) => (
   <div className="flex flex-col items-center justify-center flex-1 text-gray-400 py-20">
@@ -20,7 +21,7 @@ const PlaceholderView = ({ label }) => (
   </div>
 );
 
-// ─── Tab views map ────────────────────────────────────────────────────────────
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 const TABS = [
   { key: "overview",  label: "Overview"  },
@@ -30,6 +31,8 @@ const TABS = [
   { key: "dashboard", label: "Dashboard" },
   { key: "calendar",  label: "Calendar"  },
 ];
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 const ProjectPage = () => {
   const { id } = useParams();
@@ -45,13 +48,9 @@ const ProjectPage = () => {
   useEffect(() => {
     dispatch(fetchProjectById(id));
     dispatch(fetchProjectMembers(id));
-
-    return () => {
-      dispatch(clearCurrentProject());
-    };
+    return () => { dispatch(clearCurrentProject()); };
   }, [dispatch, id]);
 
-  // Sync active tab with project's defaultView when project loads
   useEffect(() => {
     if (currentProject?.defaultView) {
       setActiveTab(currentProject.defaultView);
@@ -70,10 +69,7 @@ const ProjectPage = () => {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 text-gray-500">
         <p className="text-sm">{error}</p>
-        <button
-          onClick={() => navigate("/")}
-          className="text-indigo-600 text-sm hover:underline"
-        >
+        <button onClick={() => navigate("/")} className="text-indigo-600 text-sm hover:underline">
           Go back home
         </button>
       </div>
@@ -81,6 +77,27 @@ const ProjectPage = () => {
   }
 
   if (!currentProject) return null;
+
+  const statuses = currentProject.statuses ?? [];
+
+  const renderTab = () => {
+    switch (activeTab) {
+      case "list":
+        return (
+          <TaskListView
+            project={currentProject}
+            statuses={statuses}
+            projectMembers={members ?? []}
+          />
+        );
+      default:
+        return (
+          <PlaceholderView
+            label={TABS.find((t) => t.key === activeTab)?.label ?? activeTab}
+          />
+        );
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
@@ -91,10 +108,8 @@ const ProjectPage = () => {
         onTabChange={setActiveTab}
         tabs={TABS}
       />
-
-      {/* Tab content */}
-      <div className="flex-1 overflow-y-auto flex flex-col">
-        <PlaceholderView label={TABS.find((t) => t.key === activeTab)?.label ?? activeTab} />
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {renderTab()}
       </div>
     </div>
   );
