@@ -1,5 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { fetchOrgProjects } from "@/store/slices/projectSlice";
+import CreateProjectModal from "@/components/project/CreateProjectModal";
 
 const NavItem = ({ to, icon, label }) => (
   <NavLink
@@ -65,61 +68,101 @@ const TeamIcon = () => (
   </svg>
 );
 
+const ProjectDot = ({ color }) => (
+  <span
+    className="w-2.5 h-2.5 rounded-full shrink-0"
+    style={{ backgroundColor: color ?? "#6C63FF" }}
+  />
+);
+
 const Sidebar = () => {
-  const [projects] = useState([]);
+  const dispatch = useAppDispatch();
+  const { projects } = useAppSelector((s) => s.projects);
+  const { currentOrg } = useAppSelector((s) => s.auth);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  useEffect(() => {
+    if (currentOrg?.id) {
+      dispatch(fetchOrgProjects());
+    }
+  }, [dispatch, currentOrg?.id]);
 
   return (
-    <aside
-      className="w-[196px] shrink-0 flex flex-col h-full overflow-y-auto"
-      style={{ backgroundColor: "#1F1F1F" }}
-    >
-      {/* Workspace header */}
-      <div className="flex items-center gap-2 px-3 py-3 border-b border-[#3A3A3A]">
-        <div className="w-6 h-6 rounded bg-pink-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-          A
-        </div>
-        <span className="text-sm font-semibold text-gray-200 truncate">My Workspace</span>
-      </div>
-
-      <nav className="flex flex-col gap-0.5 px-2 py-2 flex-1">
-        {/* Main navigation */}
-        <NavItem to="/" icon={<HomeIcon />} label="Home" />
-        <NavItem to="/my-tasks" icon={<TaskIcon />} label="My Tasks" />
-        <NavItem to="/inbox" icon={<InboxIcon />} label="Inbox" />
-
-        {/* Insights section */}
-        <SectionLabel>Insights</SectionLabel>
-        <NavItem to="/reporting" icon={<ChartIcon />} label="Reporting" />
-        <NavItem to="/portfolios" icon={<FolderIcon />} label="Portfolios" />
-        <NavItem to="/goals" icon={<GoalIcon />} label="Goals" />
-
-        {/* Projects section */}
-        <div className="flex items-center justify-between px-3 pt-4 pb-1">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            Projects
+    <>
+      <aside
+        className="w-[196px] shrink-0 flex flex-col h-full overflow-y-auto"
+        style={{ backgroundColor: "#1F1F1F" }}
+      >
+        {/* Workspace header */}
+        <div className="flex items-center gap-2 px-3 py-3 border-b border-[#3A3A3A]">
+          <div className="w-6 h-6 rounded bg-pink-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            {currentOrg?.name?.[0]?.toUpperCase() ?? "W"}
+          </div>
+          <span className="text-sm font-semibold text-gray-200 truncate">
+            {currentOrg?.name ?? "My Workspace"}
           </span>
-          <button
-            className="text-gray-500 hover:text-gray-300 transition-colors"
-            aria-label="New project"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
         </div>
-        {projects.length === 0 ? (
-          <p className="px-3 text-xs text-gray-600">No projects yet</p>
-        ) : (
-          projects.map((p) => (
-            <NavItem key={p.id} to={`/projects/${p.id}`} icon={<FolderIcon />} label={p.name} />
-          ))
-        )}
 
-        {/* Team section */}
-        <SectionLabel>Team</SectionLabel>
-        <NavItem to="/team" icon={<TeamIcon />} label="Team" />
-      </nav>
-    </aside>
+        <nav className="flex flex-col gap-0.5 px-2 py-2 flex-1">
+          {/* Main navigation */}
+          <NavItem to="/" icon={<HomeIcon />} label="Home" />
+          <NavItem to="/my-tasks" icon={<TaskIcon />} label="My Tasks" />
+          <NavItem to="/inbox" icon={<InboxIcon />} label="Inbox" />
+
+          {/* Insights section */}
+          <SectionLabel>Insights</SectionLabel>
+          <NavItem to="/reporting" icon={<ChartIcon />} label="Reporting" />
+          <NavItem to="/portfolios" icon={<FolderIcon />} label="Portfolios" />
+          <NavItem to="/goals" icon={<GoalIcon />} label="Goals" />
+
+          {/* Projects section */}
+          <div className="flex items-center justify-between px-3 pt-4 pb-1">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Projects
+            </span>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="text-gray-500 hover:text-gray-300 transition-colors"
+              aria-label="New project"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          </div>
+
+          {projects.length === 0 ? (
+            <p className="px-3 text-xs text-gray-600">No projects yet</p>
+          ) : (
+            projects.map((p) => (
+              <NavLink
+                key={p.id}
+                to={`/projects/${p.id}`}
+                className={({ isActive }) =>
+                  `flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                    isActive
+                      ? "bg-[#3A3A3A] text-white"
+                      : "text-gray-400 hover:bg-[#2D2D2D] hover:text-gray-200"
+                  }`
+                }
+              >
+                <ProjectDot color={p.color} />
+                <span className="truncate">{p.name}</span>
+              </NavLink>
+            ))
+          )}
+
+          {/* Team section */}
+          <SectionLabel>Team</SectionLabel>
+          <NavItem to="/team" icon={<TeamIcon />} label="Team" />
+        </nav>
+      </aside>
+
+      <CreateProjectModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+      />
+    </>
   );
 };
 

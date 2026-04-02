@@ -8,6 +8,13 @@
       "when": 1775053466145,
       "tag": "0000_modern_amazoness",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1775112121831,
+      "tag": "0001_sturdy_bucky",
+      "breakpoints": true
     }
   ]
 }

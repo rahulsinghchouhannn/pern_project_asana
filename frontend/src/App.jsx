@@ -2,7 +2,8 @@ import React from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAppSelector } from "@/store/hooks";
 import Layout from "@/components/Layout/Layout";
-import HomePage from "@/pages/HomePage";
+import ProjectListPage from "@/pages/ProjectListPage";
+import ProjectPage from "@/pages/ProjectPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import MyTasksPage from "@/pages/MyTasksPage";
@@ -57,7 +58,8 @@ const App = () => {
           </RequireOrg>
         }
       >
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={<ProjectListPage />} />
+        <Route path="/projects/:id" element={<ProjectPage />} />
         <Route path="/my-tasks" element={<MyTasksPage />} />
         <Route path="/inbox" element={<InboxPage />} />
       </Route>
