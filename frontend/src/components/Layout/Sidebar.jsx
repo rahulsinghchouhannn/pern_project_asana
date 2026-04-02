@@ -78,14 +78,13 @@ const ProjectDot = ({ color }) => (
 const Sidebar = () => {
   const dispatch = useAppDispatch();
   const { projects } = useAppSelector((s) => s.projects);
-  const { currentOrg } = useAppSelector((s) => s.auth);
+  const { token, currentOrg } = useAppSelector((s) => s.auth);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
-    if (currentOrg?.id) {
-      dispatch(fetchOrgProjects());
-    }
-  }, [dispatch, currentOrg?.id]);
+    if (!token || !currentOrg?.id) return;
+    dispatch(fetchOrgProjects());
+  }, [dispatch, token, currentOrg?.id]);
 
   return (
     <>

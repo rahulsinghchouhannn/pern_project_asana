@@ -58,7 +58,7 @@ const taskFilterSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v ? parseInt(v, 10) : 50))
-    .pipe(z.number().int().min(1).max(100).default(50)),
+    .pipe(z.number().int().min(1).max(500).default(50)),
 });
 
 const updatePositionSchema = z.object({

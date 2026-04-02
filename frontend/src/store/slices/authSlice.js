@@ -102,6 +102,7 @@ const clearAuthFromStorage = () => {
   localStorage.removeItem("refreshToken");
   localStorage.removeItem("user");
   localStorage.removeItem("currentOrg");
+  localStorage.removeItem("organizations");
 };
 
 // ─── Hydrate initial state from localStorage ───────────────────────────────────
@@ -110,12 +111,13 @@ const tokenFromStorage = localStorage.getItem("accessToken");
 const userFromStorage = localStorage.getItem("user");
 const refreshTokenFromStorage = localStorage.getItem("refreshToken");
 const currentOrgFromStorage = localStorage.getItem("currentOrg");
+const organizationsFromStorage = localStorage.getItem("organizations");
 
 const initialState = {
   user: userFromStorage ? JSON.parse(userFromStorage) : null,
   token: tokenFromStorage || null,
   refreshToken: refreshTokenFromStorage || null,
-  organizations: [],
+  organizations: organizationsFromStorage ? JSON.parse(organizationsFromStorage) : [],
   currentOrg: currentOrgFromStorage ? JSON.parse(currentOrgFromStorage) : null,
   isLoading: false,
   error: null,
@@ -210,6 +212,7 @@ const authSlice = createSlice({
           refreshToken: action.payload.refreshToken,
           user: action.payload.user,
         });
+        localStorage.setItem("organizations", JSON.stringify(orgs));
         if (resolvedOrg) localStorage.setItem("currentOrg", JSON.stringify(resolvedOrg));
       })
       .addCase(loginUser.rejected, (state, action) => {
@@ -262,6 +265,7 @@ const authSlice = createSlice({
           refreshToken: action.payload.refreshToken,
           user: action.payload.user,
         });
+        localStorage.setItem("organizations", JSON.stringify(orgs));
         if (resolvedOrg) localStorage.setItem("currentOrg", JSON.stringify(resolvedOrg));
       })
       .addCase(verifyMagicLink.rejected, (state, action) => {

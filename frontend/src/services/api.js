@@ -19,7 +19,7 @@ export const getOrgHeader = () => {
   return orgId ? { "x-org-id": orgId } : {};
 };
 
-// ─── Request interceptor — attach Bearer token ─────────────────────────────────
+// ─── Request interceptor — attach Bearer token + x-org-id ─────────────────────
 api.interceptors.request.use(
   (config) => {
     // Fall back to localStorage during the brief hydration window before Redux is populated
@@ -27,6 +27,15 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Attach org header — store first, localStorage as fallback
+    const currentOrg =
+      _store?.getState().auth.currentOrg ||
+      JSON.parse(localStorage.getItem("currentOrg") || "null");
+    if (currentOrg?.id) {
+      config.headers["x-org-id"] = currentOrg.id;
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useAppSelector } from "@/store/hooks";
 import taskService from "@/services/taskService";
 import TaskPriorityBadge from "@/components/task/TaskPriorityBadge";
 import TaskDetailModal from "@/components/task/TaskDetailModal";
@@ -186,18 +187,21 @@ const TABS = ["List", "Board", "Calendar", "Dashboard", "Files"];
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const MyTasksPage = () => {
+  const { token, currentOrg } = useAppSelector((s) => s.auth);
   const [activeTab, setActiveTab] = useState("List");
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
 
   useEffect(() => {
+    if (!token || !currentOrg?.id) return;
+    setLoading(true);
     taskService
       .getMyTasks()
       .then((res) => setTasks(res.data.data ?? []))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [token, currentOrg?.id]);
 
   const handleTaskUpdated = (updated) => {
     setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));

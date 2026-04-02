@@ -177,6 +177,7 @@ const ProjectPage = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { currentProject, members, isLoading, error } = useAppSelector((s) => s.projects);
+  const { token, currentOrg } = useAppSelector((s) => s.auth);
 
   const defaultView = currentProject?.defaultView ?? "list";
   const [activeTab, setActiveTab] = useState(defaultView);
@@ -201,17 +202,18 @@ const ProjectPage = () => {
 
   // ── Load project + tasks ───────────────────────────────────────────────────
   useEffect(() => {
+    if (!token || !currentOrg?.id || !id) return;
     dispatch(fetchProjectById(id));
     dispatch(fetchProjectMembers(id));
     return () => { dispatch(clearCurrentProject()); };
-  }, [dispatch, id]);
+  }, [dispatch, id, token, currentOrg?.id]);
 
   useEffect(() => {
     if (currentProject?.defaultView) setActiveTab(currentProject.defaultView);
   }, [currentProject?.defaultView]);
 
   const loadTasks = useCallback(async () => {
-    if (!id) return;
+    if (!id || !token || !currentOrg?.id) return;
     setTasksLoading(true);
     try {
       const res = await taskService.getProjectTasks(id, { limit: 200 });
@@ -221,7 +223,7 @@ const ProjectPage = () => {
     } finally {
       setTasksLoading(false);
     }
-  }, [id]);
+  }, [id, token, currentOrg?.id]);
 
   useEffect(() => {
     loadTasks();
