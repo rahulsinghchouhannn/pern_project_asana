@@ -179,11 +179,17 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.accessToken;
         state.refreshToken = action.payload.refreshToken;
+        state.organizations = action.payload.organizations ?? [];
+        const orgs = action.payload.organizations ?? [];
+        const resolvedOrg = orgs.find((o) => o.id === action.payload.user?.lastActiveOrgId) ?? orgs[0] ?? null;
+        state.currentOrg = resolvedOrg;
         persistAuthToStorage({
           accessToken: action.payload.accessToken,
           refreshToken: action.payload.refreshToken,
           user: action.payload.user,
         });
+        localStorage.setItem("organizations", JSON.stringify(orgs));
+        if (resolvedOrg) localStorage.setItem("currentOrg", JSON.stringify(resolvedOrg));
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.isLoading = false;

@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { eq, and, gt } = require("drizzle-orm");
+const { eq, and, gt, desc, count } = require("drizzle-orm");
 const { db } = require("../db");
 const { organizations, organizationMembers, invitations, users, roles, rolePermissions, userRoles } = require("../db/schema");
 const { ALL_PERMISSIONS, ADMIN_PERMISSIONS, MEMBER_PERMISSIONS } = require("../config/permissions");
@@ -139,6 +139,51 @@ const switchOrganization = async (userId, orgId) => {
 };
 
 const inviteUser = async (orgId, invitedBy, email) => {
+  // Check for existing pending invitation
+  const [pending] = await db
+    .select({ id: invitations.id })
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.organizationId, orgId),
+        eq(invitations.invitedEmail, email),
+        eq(invitations.status, "pending")
+      )
+    )
+    .limit(1);
+
+  if (pending) {
+    const err = new Error("An invitation is already pending for this email");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Check if email belongs to an existing member
+  const [existingUser] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+
+  if (existingUser) {
+    const [membership] = await db
+      .select({ id: organizationMembers.id })
+      .from(organizationMembers)
+      .where(
+        and(
+          eq(organizationMembers.organizationId, orgId),
+          eq(organizationMembers.userId, existingUser.id)
+        )
+      )
+      .limit(1);
+
+    if (membership) {
+      const err = new Error("This user is already a member");
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
@@ -164,6 +209,88 @@ const inviteUser = async (orgId, invitedBy, email) => {
   logger.info({ message: "Invitation created", orgId, invitedEmail: email });
 
   return invitation;
+};
+
+const getOrgInvitations = async (orgId) => {
+  const rows = await db
+    .select({
+      id: invitations.id,
+      invitedEmail: invitations.invitedEmail,
+      status: invitations.status,
+      expiresAt: invitations.expiresAt,
+      createdAt: invitations.createdAt,
+      invitedByName: users.name,
+      invitedByEmail: users.email,
+      invitedByAvatarUrl: users.avatarUrl,
+    })
+    .from(invitations)
+    .innerJoin(users, eq(invitations.invitedBy, users.id))
+    .where(eq(invitations.organizationId, orgId))
+    .orderBy(desc(invitations.createdAt))
+    .limit(100);
+
+  return rows;
+};
+
+const resendInvitation = async (orgId, invitationId) => {
+  const [invitation] = await db
+    .select({ id: invitations.id, organizationId: invitations.organizationId })
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.id, invitationId),
+        eq(invitations.organizationId, orgId)
+      )
+    )
+    .limit(1);
+
+  if (!invitation) {
+    const err = new Error("Invitation not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const newToken = crypto.randomBytes(32).toString("hex");
+  const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  const [updated] = await db
+    .update(invitations)
+    .set({ token: newToken, expiresAt: newExpiresAt, status: "pending" })
+    .where(eq(invitations.id, invitationId))
+    .returning();
+
+  logger.info({ message: "Invitation resent", orgId, invitationId });
+  return updated;
+};
+
+const cancelInvitation = async (orgId, invitationId) => {
+  const [invitation] = await db
+    .select({ id: invitations.id, status: invitations.status })
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.id, invitationId),
+        eq(invitations.organizationId, orgId)
+      )
+    )
+    .limit(1);
+
+  if (!invitation) {
+    const err = new Error("Invitation not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (invitation.status !== "pending") {
+    const err = new Error("Only pending invitations can be cancelled");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  await db.delete(invitations).where(eq(invitations.id, invitationId));
+
+  logger.info({ message: "Invitation cancelled", orgId, invitationId });
+  return { success: true };
 };
 
 const acceptInvitation = async (token, userId) => {
@@ -296,6 +423,38 @@ const removeMember = async (orgId, targetUserId, requestingUserId) => {
     throw err;
   }
 
+  // Check if target is the last owner
+  const [ownerRole] = await db
+    .select({ id: roles.id })
+    .from(roles)
+    .where(
+      and(
+        eq(roles.organizationId, orgId),
+        eq(roles.name, "Owner"),
+        eq(roles.isSystem, true)
+      )
+    )
+    .limit(1);
+
+  if (ownerRole) {
+    const owners = await db
+      .select({ userId: userRoles.userId })
+      .from(userRoles)
+      .where(
+        and(
+          eq(userRoles.organizationId, orgId),
+          eq(userRoles.roleId, ownerRole.id)
+        )
+      );
+
+    const isTargetOwner = owners.some((o) => o.userId === targetUserId);
+    if (isTargetOwner && owners.length === 1) {
+      const err = new Error("Cannot remove the last owner of the organization");
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
   await db
     .delete(organizationMembers)
     .where(eq(organizationMembers.id, membership.id));
@@ -309,6 +468,9 @@ module.exports = {
   getUserOrganizations,
   switchOrganization,
   inviteUser,
+  getOrgInvitations,
+  resendInvitation,
+  cancelInvitation,
   acceptInvitation,
   rejectInvitation,
   getOrgMembers,

@@ -56,4 +56,37 @@ const removeMember = asyncHandler(async (req, res) => {
   res.status(200).json(successResponse(result));
 });
 
-module.exports = { createOrg, getUserOrgs, switchOrg, inviteUser, acceptInvite, rejectInvite, getMembers, removeMember };
+const getInvitations = asyncHandler(async (req, res) => {
+  const rows = await organizationService.getOrgInvitations(req.params.orgId);
+  res.status(200).json(successResponse(rows));
+});
+
+const resendInvitation = asyncHandler(async (req, res) => {
+  const updated = await organizationService.resendInvitation(
+    req.params.orgId,
+    req.params.invitationId
+  );
+  res.status(200).json(successResponse(updated));
+});
+
+const cancelInvitation = asyncHandler(async (req, res) => {
+  const result = await organizationService.cancelInvitation(
+    req.params.orgId,
+    req.params.invitationId
+  );
+  res.status(200).json(successResponse(result));
+});
+
+module.exports = {
+  createOrg,
+  getUserOrgs,
+  switchOrg,
+  inviteUser,
+  acceptInvite,
+  rejectInvite,
+  getMembers,
+  removeMember,
+  getInvitations,
+  resendInvitation,
+  cancelInvitation,
+};

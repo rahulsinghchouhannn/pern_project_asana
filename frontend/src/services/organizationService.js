@@ -28,7 +28,22 @@ const getOrgMembers = async (orgId) =>
   });
 
 const removeMember = async (orgId, userId) =>
-  api.delete(`/organizations/${orgId}/members/${userId}`);
+  api.post(`/organizations/${orgId}/members/${userId}/remove`);
+
+const getOrgInvitations = async (orgId) =>
+  api.get(`/organizations/${orgId}/invitations`);
+
+const resendInvitation = async (orgId, invitationId) =>
+  api.post(`/organizations/${orgId}/invitations/${invitationId}/resend`);
+
+const cancelInvitation = async (orgId, invitationId) =>
+  api.delete(`/organizations/${orgId}/invitations/${invitationId}`);
+
+const getOrgRoles = async (orgId) =>
+  api.get(`/organizations/${orgId}/roles`);
+
+const updateMemberRole = async (orgId, userId, roleId) =>
+  api.put(`/organizations/${orgId}/members/${userId}/role`, { roleId });
 
 export default {
   createOrganization,
@@ -39,4 +54,9 @@ export default {
   rejectInvitation,
   getOrgMembers,
   removeMember,
+  getOrgInvitations,
+  resendInvitation,
+  cancelInvitation,
+  getOrgRoles,
+  updateMemberRole,
 };

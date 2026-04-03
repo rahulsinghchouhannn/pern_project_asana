@@ -78,6 +78,7 @@ const register = async ({ name, email, password }) => {
     .where(eq(users.id, user.id));
 
   const { accessToken, refreshToken } = await generateTokens(user.id, user.email);
+  const organizations = await organizationService.getUserOrganizations(user.id);
 
   logger.info({ message: "User registered", userId: user.id });
 
@@ -85,6 +86,7 @@ const register = async ({ name, email, password }) => {
     user: { ...safeUser(user), lastActiveOrgId: org.id },
     accessToken,
     refreshToken,
+    organizations,
   };
 };
 

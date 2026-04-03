@@ -46,12 +46,48 @@ router.delete(
   organizationController.removeMember
 );
 
+// POST /api/organizations/:orgId/members/:userId/remove — remove member (POST variant)
+router.post(
+  "/:orgId/members/:userId/remove",
+  authMiddleware,
+  orgMiddleware,
+  requirePermission(PERMISSIONS.REMOVE_USER),
+  organizationController.removeMember
+);
+
 // GET /api/organizations/:orgId/members — list members
 router.get(
   "/:orgId/members",
   authMiddleware,
   orgMiddleware,
   organizationController.getMembers
+);
+
+// GET /api/organizations/:orgId/invitations — list all invitations
+router.get(
+  "/:orgId/invitations",
+  authMiddleware,
+  orgMiddleware,
+  requirePermission(PERMISSIONS.INVITE_USER),
+  organizationController.getInvitations
+);
+
+// POST /api/organizations/:orgId/invitations/:invitationId/resend
+router.post(
+  "/:orgId/invitations/:invitationId/resend",
+  authMiddleware,
+  orgMiddleware,
+  requirePermission(PERMISSIONS.INVITE_USER),
+  organizationController.resendInvitation
+);
+
+// DELETE /api/organizations/:orgId/invitations/:invitationId — cancel invitation
+router.delete(
+  "/:orgId/invitations/:invitationId",
+  authMiddleware,
+  orgMiddleware,
+  requirePermission(PERMISSIONS.INVITE_USER),
+  organizationController.cancelInvitation
 );
 
 // POST /api/invitations/accept — accept invitation (auth required)

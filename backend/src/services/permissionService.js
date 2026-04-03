@@ -211,6 +211,38 @@ const deleteRole = async (roleId, orgId) => {
 };
 
 const assignOrgRole = async (userId, orgId, roleId) => {
+  // Prevent changing the role of the last owner
+  const [ownerRole] = await db
+    .select({ id: roles.id })
+    .from(roles)
+    .where(
+      and(
+        eq(roles.organizationId, orgId),
+        eq(roles.name, "Owner"),
+        eq(roles.isSystem, true)
+      )
+    )
+    .limit(1);
+
+  if (ownerRole && ownerRole.id !== roleId) {
+    const owners = await db
+      .select({ userId: userRoles.userId })
+      .from(userRoles)
+      .where(
+        and(
+          eq(userRoles.organizationId, orgId),
+          eq(userRoles.roleId, ownerRole.id)
+        )
+      );
+
+    const isCurrentlyOwner = owners.some((o) => o.userId === userId);
+    if (isCurrentlyOwner && owners.length === 1) {
+      const err = new Error("Cannot change the role of the last owner");
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
   await db
     .insert(userRoles)
     .values({ userId, organizationId: orgId, roleId })
