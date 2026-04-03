@@ -10,7 +10,7 @@ const WorkflowGalleryPage = () => {
       <div className="flex items-center justify-between px-8 py-4 bg-white border-b border-gray-200">
         <h1 className="text-xl font-semibold text-gray-900">Workflow gallery</h1>
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/')}
           className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
           aria-label="Close"
         >

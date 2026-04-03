@@ -273,7 +273,8 @@ const SortPanel = ({ sort, onChange, onClose }) => {
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
-const TABS = [
+// Master ordered list — drives label + render order for every view key.
+const ALL_TABS = [
   { key: "overview",  label: "Overview"  },
   { key: "list",      label: "List"      },
   { key: "board",     label: "Board"     },
@@ -281,6 +282,14 @@ const TABS = [
   { key: "dashboard", label: "Dashboard" },
   { key: "calendar",  label: "Calendar"  },
 ];
+
+// Derive which tabs to show from the project's saved views array.
+// "list" is always included as a safety guarantee.
+const getProjectTabs = (views) => {
+  if (!views || !Array.isArray(views) || views.length === 0) return ALL_TABS;
+  const viewSet = new Set([...views, "list"]);
+  return ALL_TABS.filter((t) => viewSet.has(t.key));
+};
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -291,8 +300,7 @@ const ProjectPage = () => {
   const { currentProject, members, isLoading, error } = useAppSelector((s) => s.projects);
   const { token, currentOrg } = useAppSelector((s) => s.auth);
 
-  const defaultView = currentProject?.defaultView ?? "list";
-  const [activeTab, setActiveTab] = useState(defaultView);
+  const [activeTab, setActiveTab] = useState("list");
   const [showCustomizeFields, setShowCustomizeFields] = useState(false);
 
   // ── Task state ─────────────────────────────────────────────────────────────
@@ -320,9 +328,10 @@ const ProjectPage = () => {
     return () => { dispatch(clearCurrentProject()); };
   }, [dispatch, id, token, currentOrg?.id]);
 
+  // When the project loads, activate "list" (always visible and the required default).
   useEffect(() => {
-    if (currentProject?.defaultView) setActiveTab(currentProject.defaultView);
-  }, [currentProject?.defaultView]);
+    if (currentProject) setActiveTab("list");
+  }, [currentProject?.id]);
 
   const loadTasks = useCallback(async () => {
     if (!id || !token || !currentOrg?.id) return;
@@ -437,7 +446,7 @@ const ProjectPage = () => {
       case "calendar":  return <CalendarView {...sharedProps} />;
       case "timeline":  return <TimelineView {...sharedProps} />;
       default:
-        return <PlaceholderView label={TABS.find((t) => t.key === activeTab)?.label ?? activeTab} />;
+        return <PlaceholderView label={ALL_TABS.find((t) => t.key === activeTab)?.label ?? activeTab} />;
     }
   };
 
@@ -457,6 +466,8 @@ const ProjectPage = () => {
 
   if (!currentProject) return null;
 
+  const projectTabs = getProjectTabs(currentProject.views);
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white">
       <ProjectHeader
@@ -464,7 +475,7 @@ const ProjectPage = () => {
         members={members}
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        tabs={TABS}
+        tabs={projectTabs}
         onCustomize={() => setShowCustomizeFields(true)}
       />
 

@@ -91,6 +91,24 @@ const App = () => {
         }
       />
 
+      {/* ── Project creation — standalone full-page (no Layout) ─────────── */}
+      <Route
+        path="/projects/new"
+        element={
+          <RequireOrg isHydrated={isHydrated}>
+            <WorkflowGalleryPage />
+          </RequireOrg>
+        }
+      />
+      <Route
+        path="/projects/new/blank"
+        element={
+          <RequireOrg isHydrated={isHydrated}>
+            <CreateProjectPage />
+          </RequireOrg>
+        }
+      />
+
       {/* ── Org-scoped routes — wrapped by Layout ─────────────────────────── */}
       <Route
         element={
@@ -100,8 +118,6 @@ const App = () => {
         }
       >
         <Route path="/" element={<HomePage />} />
-        <Route path="/projects/new" element={<WorkflowGalleryPage />} />
-        <Route path="/projects/new/blank" element={<CreateProjectPage />} />
         <Route path="/projects/:id" element={<ProjectPage />} />
         <Route path="/my-tasks" element={<MyTasksPage />} />
         <Route path="/inbox" element={<InboxPage />} />
