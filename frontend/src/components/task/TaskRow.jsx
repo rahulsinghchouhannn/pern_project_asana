@@ -155,7 +155,7 @@ const TaskRow = ({
   return (
     <tr className="group border-b border-gray-100 hover:bg-gray-50/70 h-10">
       {/* ── Name ─────────────────────────────────────────── */}
-      <td className="py-0 pl-8 pr-2 overflow-hidden border-r border-gray-200">
+      <td className="py-0 pl-8 pr-2 w-125 overflow-hidden border-r border-gray-200">
         <div className="flex items-center gap-2 h-10 min-w-0 overflow-hidden">
           {/* Completion circle */}
           <button
@@ -277,6 +277,8 @@ const TaskRow = ({
           </td>
         );
       })}
+      {/* spacer — matches header spacer, absorbs remaining width */}
+      <td />
     </tr>
   );
 };

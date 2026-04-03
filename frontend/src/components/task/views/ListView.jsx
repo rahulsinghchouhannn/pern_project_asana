@@ -188,8 +188,8 @@ const ListView = ({
         <table className="w-full border-collapse table-fixed">
           <thead className="sticky top-0 bg-white z-10">
             <tr className="border-b border-gray-200">
-              {/* Name — 40% of table width */}
-              <th className="text-left text-xs font-medium text-gray-500 py-2 pl-10 pr-2 border-r border-gray-200">
+              {/* Name — fixed 350px */}
+              <th className="text-left text-xs font-medium text-gray-500 py-2 pl-10 pr-2 w-125 border-r border-gray-200">
                 Name
               </th>
               {/* Assignee — strictly 160px */}
@@ -248,6 +248,8 @@ const ListView = ({
                   )}
                 </div>
               </th>
+              {/* spacer — absorbs all remaining horizontal space */}
+              <th />
             </tr>
           </thead>
 
