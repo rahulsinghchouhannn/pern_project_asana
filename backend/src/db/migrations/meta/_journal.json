@@ -50,6 +50,13 @@
       "when": 1775131125723,
       "tag": "0006_lovely_lady_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775202337333,
+      "tag": "0007_light_mulholland_black",
+      "breakpoints": true
     }
   ]
 }

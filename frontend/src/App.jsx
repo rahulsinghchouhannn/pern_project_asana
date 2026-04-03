@@ -20,6 +20,8 @@ import DashboardDetailPage from "@/pages/DashboardDetailPage";
 import PortfoliosPage from "@/pages/PortfoliosPage";
 import GoalsPage from "@/pages/GoalsPage";
 import OrgWorkspacePage from "@/pages/OrgWorkspacePage";
+import WorkflowGalleryPage from "@/pages/WorkflowGalleryPage";
+import CreateProjectPage from "@/pages/CreateProjectPage";
 
 // ─── Auth guard — redirects unauthenticated users to /login ────────────────────
 const RequireAuth = ({ children, isHydrated }) => {
@@ -98,6 +100,8 @@ const App = () => {
         }
       >
         <Route path="/" element={<HomePage />} />
+        <Route path="/projects/new" element={<WorkflowGalleryPage />} />
+        <Route path="/projects/new/blank" element={<CreateProjectPage />} />
         <Route path="/projects/:id" element={<ProjectPage />} />
         <Route path="/my-tasks" element={<MyTasksPage />} />
         <Route path="/inbox" element={<InboxPage />} />

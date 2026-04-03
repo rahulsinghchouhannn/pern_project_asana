@@ -5,16 +5,15 @@ const hexColor = z
   .regex(/^#[0-9A-Fa-f]{6}$/, { message: "Color must be a valid hex code (e.g. #6C63FF)" })
   .optional();
 
-const viewEnum = z
-  .enum(["list", "board", "timeline", "calendar"])
-  .optional();
+const viewEnum = z.enum(["overview", "list", "board", "timeline", "dashboard", "calendar"]);
 
 const createProjectSchema = z.object({
   name: z.string().min(1, { message: "Name is required" }).max(255),
   description: z.string().max(2000).optional(),
   color: hexColor,
   isPrivate: z.boolean().optional(),
-  defaultView: viewEnum,
+  defaultView: viewEnum.optional(),
+  views: z.array(viewEnum).min(1).optional(),
 });
 
 const updateProjectSchema = z.object({
@@ -24,7 +23,8 @@ const updateProjectSchema = z.object({
   isPrivate: z.boolean().optional(),
   isArchived: z.boolean().optional(),
   isCompleted: z.boolean().optional(),
-  defaultView: viewEnum,
+  defaultView: viewEnum.optional(),
+  views: z.array(viewEnum).min(1).optional(),
 });
 
 const addMemberSchema = z.object({

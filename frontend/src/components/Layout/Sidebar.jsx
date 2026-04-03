@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom";
+import React, { useEffect } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchOrgProjects } from "@/store/slices/projectSlice";
-import CreateProjectModal from "@/components/project/CreateProjectModal";
 import usePermissions from "@/hooks/usePermissions";
 
 const NavItem = ({ to, icon, label }) => (
@@ -85,9 +84,9 @@ const SettingsIcon = () => (
 
 const Sidebar = () => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const { projects } = useAppSelector((s) => s.projects);
   const { token, currentOrg } = useAppSelector((s) => s.auth);
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const { can } = usePermissions();
 
   useEffect(() => {
@@ -96,8 +95,7 @@ const Sidebar = () => {
   }, [dispatch, token, currentOrg?.id]);
 
   return (
-    <>
-      <aside
+    <aside
         className="w-[196px] shrink-0 flex flex-col h-full overflow-y-auto"
         style={{ backgroundColor: "#1F1F1F" }}
       >
@@ -130,7 +128,7 @@ const Sidebar = () => {
             </span>
             {can("create_project") && (
               <button
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => navigate("/projects/new")}
                 className="text-gray-500 hover:text-gray-300 transition-colors"
                 aria-label="New project"
               >
@@ -171,12 +169,6 @@ const Sidebar = () => {
           <NavItem to="/settings/organization" icon={<SettingsIcon />} label="Org Settings" />
         </nav>
       </aside>
-
-      <CreateProjectModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-      />
-    </>
   );
 };
 

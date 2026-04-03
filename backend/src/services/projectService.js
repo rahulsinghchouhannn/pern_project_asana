@@ -45,6 +45,7 @@ const createProject = async (orgId, userId, data) => {
       color: data.color ?? "#6C63FF",
       isPrivate: data.isPrivate ?? false,
       defaultView: data.defaultView ?? "list",
+      views: data.views ?? ["overview", "list", "board", "timeline", "dashboard"],
       createdBy: userId,
     })
     .returning();

@@ -5,6 +5,7 @@ const {
   text,
   boolean,
   timestamp,
+  json,
 } = require("drizzle-orm/pg-core");
 const { users } = require("./users");
 const { organizations } = require("./organizations");
@@ -21,6 +22,7 @@ const projects = pgTable("projects", {
   isArchived: boolean("is_archived").default(false),
   isCompleted: boolean("is_completed").default(false),
   defaultView: varchar("default_view", { length: 50 }).default("list"),
+  views: json("views"),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
