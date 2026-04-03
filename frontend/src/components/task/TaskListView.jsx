@@ -23,7 +23,7 @@ const StatusSection = ({ status, tasks, statuses, projectMembers, onTaskClick, o
     <tbody>
       {/* Section header */}
       <tr className="bg-gray-50 border-b border-gray-100">
-        <td colSpan={5} className="py-2 pl-4 pr-2">
+        <td colSpan={3} className="py-2 pl-4 pr-2">
           <div className="flex items-center gap-2">
             <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-1.5">
               <ChevronIcon open={open} />
@@ -53,7 +53,7 @@ const StatusSection = ({ status, tasks, statuses, projectMembers, onTaskClick, o
       {/* Add task row */}
       {open && (
         <tr className="border-b border-gray-50">
-          <td colSpan={5} className="py-1.5 pl-10 pr-2">
+          <td colSpan={3} className="py-1.5 pl-10 pr-2">
             <button
               onClick={() => onAddTask(status.id)}
               className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
@@ -147,8 +147,6 @@ const TaskListView = ({ project, statuses = [], projectMembers = [] }) => {
               <th className="text-left text-xs font-medium text-gray-500 py-2 pl-10 pr-2">Name</th>
               <th className="text-left text-xs font-medium text-gray-500 py-2 px-2 w-20">Assignee</th>
               <th className="text-left text-xs font-medium text-gray-500 py-2 px-2 w-28">Due date</th>
-              <th className="text-left text-xs font-medium text-gray-500 py-2 px-2 w-24">Priority</th>
-              <th className="text-left text-xs font-medium text-gray-500 py-2 px-2 w-24">Status</th>
             </tr>
           </thead>
 
@@ -167,7 +165,7 @@ const TaskListView = ({ project, statuses = [], projectMembers = [] }) => {
           {/* Add section row */}
           <tbody>
             <tr>
-              <td colSpan={5} className="py-3 pl-4">
+              <td colSpan={3} className="py-3 pl-4">
                 <button className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

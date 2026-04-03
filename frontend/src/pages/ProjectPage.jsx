@@ -14,6 +14,7 @@ import TimelineView from "@/components/task/views/TimelineView";
 import Spinner from "@/components/ui/Spinner";
 import taskService from "@/services/taskService";
 import CustomFieldsManager from "@/components/customFields/CustomFieldsManager";
+import socketService from "@/services/socketService";
 
 // ─── Placeholder ──────────────────────────────────────────────────────────────
 
@@ -349,6 +350,35 @@ const ProjectPage = () => {
   useEffect(() => {
     loadTasks();
   }, [loadTasks]);
+
+  // ── Socket: join project room and sync real-time task events ───────────────
+  useEffect(() => {
+    if (!id) return;
+
+    socketService.emit("join_project", id);
+
+    const handleTaskCreated = (task) => {
+      setTasks((prev) => {
+        if (prev.find((t) => t.id === task.id)) return prev;
+        return [...prev, task];
+      });
+    };
+
+    const handleTaskUpdated = (task) => {
+      setTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, ...task } : t))
+      );
+    };
+
+    socketService.on("task:created", handleTaskCreated);
+    socketService.on("task:updated", handleTaskUpdated);
+
+    return () => {
+      socketService.emit("leave_project", id);
+      socketService.off("task:created", handleTaskCreated);
+      socketService.off("task:updated", handleTaskUpdated);
+    };
+  }, [id]);
 
   // ── Task mutation handlers (keep shared state in sync) ─────────────────────
   const handleTaskCreated = useCallback((newTask) => {

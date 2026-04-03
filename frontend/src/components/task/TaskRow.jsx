@@ -1,17 +1,27 @@
-import React from "react";
-import TaskPriorityBadge from "./TaskPriorityBadge";
+const getDueDateDisplay = (task) => {
+  if (!task.dueDate && !task.startDate) return null;
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const formatShort = (dateStr) =>
+    new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  let label;
+  if (task.startDate && task.dueDate) {
+    label = `${formatShort(task.startDate)} – ${formatShort(task.dueDate)}`;
+  } else {
+    label = formatShort(task.dueDate || task.startDate);
+  }
+
+  const due = task.dueDate ? new Date(task.dueDate) : null;
+  if (due) {
+    due.setHours(0, 0, 0, 0);
+    if (due.getTime() === today.getTime()) return { label: "Today", color: "text-green-600 font-medium" };
+    if (!task.isCompleted && due < today) return { label, color: "text-red-500 font-medium" };
+  }
+  return { label, color: "text-gray-500" };
 };
-
-const AvatarIcon = () => (
-  <svg className="w-5 h-5 text-gray-300" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
-  </svg>
-);
 
 const renderFieldValue = (field, value) => {
   if (!value) return <span className="text-gray-300">—</span>;
@@ -49,18 +59,9 @@ const renderFieldValue = (field, value) => {
   }
 };
 
-const TaskRow = ({ task, statuses = [], customFields = [], visibleFieldIds = [], onClick }) => {
-  const status = statuses.find((s) => s.id === task.statusId);
+const TaskRow = ({ task, customFields = [], visibleFieldIds = [], onClick }) => {
   const hasAssignees = task.assignees?.length > 0;
-  const dateLabel =
-    task.startDate && task.dueDate
-      ? `${formatDate(task.startDate)} – ${formatDate(task.dueDate)}`
-      : formatDate(task.dueDate) || formatDate(task.startDate) || null;
-
-  const isOverdue =
-    !task.isCompleted &&
-    task.dueDate &&
-    new Date(task.dueDate) < new Date();
+  const dateDisplay = getDueDateDisplay(task);
 
   return (
     <tr
@@ -77,12 +78,9 @@ const TaskRow = ({ task, statuses = [], customFields = [], visibleFieldIds = [],
                 ? "bg-indigo-500 border-indigo-500"
                 : "border-gray-300 hover:border-indigo-400"
             }`}
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
+            onClick={(e) => e.stopPropagation()}
             title={task.isCompleted ? "Reopen task" : "Complete task"}
           />
-          {/* Subtask indent indicator */}
           {task.parentTaskId && <span className="w-4 flex-shrink-0" />}
           <span
             className={`text-sm truncate ${
@@ -96,6 +94,15 @@ const TaskRow = ({ task, statuses = [], customFields = [], visibleFieldIds = [],
               {task.subtaskCount}
             </span>
           )}
+          {/* Arrow on hover */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onClick?.(task); }}
+            className="flex-shrink-0 ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 text-gray-400"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
       </td>
 
@@ -125,41 +132,24 @@ const TaskRow = ({ task, statuses = [], customFields = [], visibleFieldIds = [],
                   </div>
                 )
               )}
+              {task.assignees.length > 2 && (
+                <div className="w-6 h-6 rounded-full bg-gray-200 border border-white flex items-center justify-center">
+                  <span className="text-xs text-gray-600">+{task.assignees.length - 2}</span>
+                </div>
+              )}
             </div>
           ) : (
-            <AvatarIcon />
+            <svg className="w-5 h-5 text-gray-200" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+            </svg>
           )}
         </div>
       </td>
 
       {/* Due date */}
       <td className="py-2 px-2 w-28">
-        {dateLabel && (
-          <span className={`text-xs ${isOverdue ? "text-red-500 font-medium" : "text-gray-500"}`}>
-            {dateLabel}
-          </span>
-        )}
-      </td>
-
-      {/* Priority */}
-      <td className="py-2 px-2 w-24">
-        {task.priority && task.priority !== "none" && (
-          <TaskPriorityBadge priority={task.priority} />
-        )}
-      </td>
-
-      {/* Status */}
-      <td className="py-2 px-2 w-24">
-        {status && (
-          <span
-            className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-            style={{
-              backgroundColor: (status.color ?? "#E0E0E0") + "22",
-              color: status.color ?? "#666",
-            }}
-          >
-            {status.name}
-          </span>
+        {dateDisplay && (
+          <span className={`text-xs ${dateDisplay.color}`}>{dateDisplay.label}</span>
         )}
       </td>
 

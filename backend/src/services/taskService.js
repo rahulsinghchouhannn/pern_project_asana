@@ -411,7 +411,9 @@ const updateTask = async (taskId, userId, data) => {
     await Promise.all(historyInserts);
   }
 
-  return getTaskById(taskId);
+  const fullTask = await getTaskById(taskId);
+  emitToProject(existing.projectId, "task:updated", fullTask);
+  return fullTask;
 };
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -507,7 +509,9 @@ const addAssignee = async (taskId, userId, assignedBy) => {
     })
     .catch((err) => logger.error({ message: "Failed to handle task_assigned side effects", err }));
 
-  return getTaskById(taskId);
+  const fullTask = await getTaskById(taskId);
+  emitToProject(fullTask.projectId, "task:updated", fullTask);
+  return fullTask;
 };
 
 const removeAssignee = async (taskId, userId, removedBy) => {
