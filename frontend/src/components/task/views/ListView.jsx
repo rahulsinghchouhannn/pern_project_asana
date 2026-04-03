@@ -185,19 +185,19 @@ const ListView = ({
 
       {/* Table */}
       <div className="flex-1 overflow-y-auto">
-        <table className="w-full border-collapse">
+        <table className="w-full border-collapse table-fixed">
           <thead className="sticky top-0 bg-white z-10">
             <tr className="border-b border-gray-200">
-              {/* Name — takes all remaining space */}
-              <th className="text-left text-xs font-medium text-gray-500 py-2 pl-10 pr-2">
+              {/* Name — 40% of table width */}
+              <th className="text-left text-xs font-medium text-gray-500 py-2 pl-10 pr-2 border-r border-gray-200">
                 Name
               </th>
-              {/* Assignee — fixed 120px */}
-              <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-[120px]">
+              {/* Assignee — strictly 160px */}
+              <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-[160px] border-r border-gray-200">
                 Assignee
               </th>
-              {/* Due date — fixed 100px */}
-              <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-[100px]">
+              {/* Due date — strictly 110px */}
+              <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-[110px] border-r border-gray-200">
                 Due date
               </th>
 

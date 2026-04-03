@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import taskService from "@/services/taskService";
 import AssigneeDropdown from "./AssigneeDropdown";
 import DueDatePicker from "./DueDatePicker";
@@ -153,7 +153,7 @@ const InlineTaskRow = ({
   return (
     <tr className="border-b border-gray-100 bg-indigo-50/20">
       {/* Name column */}
-      <td className="py-2 pl-4 pr-2">
+      <td className="py-2 pl-8 pr-2 overflow-hidden border-r border-gray-200">
         <div className="flex items-center gap-2 group">
           {/* Completion circle (visual only on new row) */}
           <div className="flex-shrink-0 w-4 h-4 rounded-full border-2 border-gray-300" />
@@ -186,7 +186,7 @@ const InlineTaskRow = ({
       </td>
 
       {/* Assignee column */}
-      <td className="py-2 px-2 w-20 relative">
+      <td className="py-2 px-3 w-[160px] relative border-r border-gray-200">
         <button
           onClick={() => {
             setShowAssignee((v) => !v);
@@ -234,7 +234,7 @@ const InlineTaskRow = ({
       </td>
 
       {/* Due date column */}
-      <td className="py-2 px-2 w-28 relative">
+      <td className="py-2 px-3 w-[110px] relative border-r border-gray-200">
         <button
           onClick={() => {
             setShowDatePicker((v) => !v);

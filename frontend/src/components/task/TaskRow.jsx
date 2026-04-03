@@ -155,8 +155,8 @@ const TaskRow = ({
   return (
     <tr className="group border-b border-gray-100 hover:bg-gray-50/70 h-10">
       {/* ── Name ─────────────────────────────────────────── */}
-      <td className="py-0 pl-4 pr-2">
-        <div className="flex items-center gap-2 h-10 min-w-0">
+      <td className="py-0 pl-8 pr-2 overflow-hidden border-r border-gray-200">
+        <div className="flex items-center gap-2 h-10 min-w-0 overflow-hidden">
           {/* Completion circle */}
           <button
             onClick={handleToggleComplete}
@@ -199,7 +199,7 @@ const TaskRow = ({
       </td>
 
       {/* ── Assignee ─────────────────────────────────────── */}
-      <td className="py-0 px-3 w-[120px] relative">
+      <td className="py-0 px-3 w-[160px] relative border-r border-gray-200">
         <button
           onClick={(e) => { e.stopPropagation(); setShowAssignee((v) => !v); setShowDatePicker(false); }}
           className="flex items-center gap-1.5 max-w-full"
@@ -241,7 +241,7 @@ const TaskRow = ({
       </td>
 
       {/* ── Due date ─────────────────────────────────────── */}
-      <td className="py-0 px-3 w-[100px] relative">
+      <td className="py-0 px-3 w-[110px] relative border-r border-gray-200">
         <button
           onClick={(e) => { e.stopPropagation(); setShowDatePicker((v) => !v); setShowAssignee(false); }}
           className="flex items-center"
