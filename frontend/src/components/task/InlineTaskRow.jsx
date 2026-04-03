@@ -67,6 +67,8 @@ const InlineTaskRow = ({
   const nameInputRef = useRef(null);
   // Stable ref so async callbacks always read the latest task id
   const taskIdRef = useRef(null);
+  // Guard: prevents two concurrent create requests when user types fast
+  const creatingRef = useRef(false);
   const debounceRef = useRef(null);
 
   useEffect(() => {
@@ -76,21 +78,24 @@ const InlineTaskRow = ({
 
   const createOrUpdateTitle = async (newTitle) => {
     if (!newTitle.trim()) return;
+    if (creatingRef.current) return; // prevent concurrent creates
     setSaving(true);
     try {
       if (!taskIdRef.current) {
+        creatingRef.current = true;
         const res = await taskService.createTask(projectId, {
           title: newTitle.trim(),
           statusId,
         });
         const newTask = res.data.data;
         taskIdRef.current = newTask.id;
+        creatingRef.current = false;
         onCreated?.(newTask);
       } else {
         await taskService.updateTask(taskIdRef.current, { title: newTitle.trim() });
       }
     } catch {
-      // Silent — user can retry
+      creatingRef.current = false; // allow retry on error
     } finally {
       setSaving(false);
     }

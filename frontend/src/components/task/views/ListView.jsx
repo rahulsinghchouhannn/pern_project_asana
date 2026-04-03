@@ -25,20 +25,21 @@ const StatusSection = ({
   projectId,
   projectMembers,
   inlineStatusId,
-  onTaskClick,
+  onUpdated,
   onAddTask,
+  onOpenDetail,
   onInlineCreated,
   onInlineClose,
-  onInlineOpenDetail,
 }) => {
   const [open, setOpen] = useState(true);
-  const colCount = 3 + visibleFieldIds.length;
+  // +1 for the trailing "+" th cell
+  const colSpan = 3 + visibleFieldIds.length + 1;
 
   return (
     <tbody>
       {/* Section header */}
       <tr className="bg-gray-50 border-b border-gray-100">
-        <td colSpan={colCount + 1} className="py-2 pl-4 pr-2">
+        <td colSpan={colSpan} className="py-2 pl-4 pr-2">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setOpen((v) => !v)}
@@ -60,35 +61,39 @@ const StatusSection = ({
         </td>
       </tr>
 
+      {/* Existing task rows — inline editable */}
       {open &&
         tasks.map((task) => (
           <TaskRow
             key={task.id}
             task={task}
+            projectId={projectId}
+            projectMembers={projectMembers}
             customFields={customFields}
             visibleFieldIds={visibleFieldIds}
-            onClick={onTaskClick}
+            onUpdated={onUpdated}
+            onOpenDetail={onOpenDetail}
           />
         ))}
 
-      {/* Inline new-task row for this section */}
+      {/* Inline new-task row */}
       {open && inlineStatusId === status.id && (
         <InlineTaskRow
           key={`inline-${status.id}`}
           statusId={status.id}
           projectId={projectId}
           projectMembers={projectMembers}
-          colCount={colCount}
+          colCount={3 + visibleFieldIds.length}
           onCreated={onInlineCreated}
           onClose={onInlineClose}
-          onOpenDetail={onInlineOpenDetail}
+          onOpenDetail={onOpenDetail}
         />
       )}
 
-      {/* "Add task…" link at the bottom of each section */}
+      {/* "Add task…" secondary trigger */}
       {open && inlineStatusId !== status.id && (
         <tr className="border-b border-gray-50">
-          <td colSpan={colCount + 1} className="py-1.5 pl-10 pr-2">
+          <td colSpan={colSpan} className="py-1.5 pl-10 pr-2">
             <button
               onClick={() => onAddTask(status.id)}
               className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
@@ -128,7 +133,7 @@ const ListView = ({
       .then((res) => {
         const fields = res.data.data ?? [];
         setCustomFields(fields);
-        setVisibleFieldIds([]);  // No custom fields visible by default
+        setVisibleFieldIds([]); // no custom fields visible by default
       })
       .catch(() => {});
   }, [projectId]);
@@ -146,26 +151,26 @@ const ListView = ({
     return acc;
   }, {});
 
-  const colCount = 3 + visibleFields.length;
-
   const handleAddTask = (statusId) => setInlineStatusId(statusId);
+  const handleInlineClose = () => setInlineStatusId(null);
 
   const handleInlineCreated = (newTask) => {
     onTaskCreated?.(newTask);
-    // Keep inline row open so the user can keep adding tasks
+    // Row stays open so user can keep typing another task
   };
 
-  const handleInlineClose = () => setInlineStatusId(null);
-
-  const handleInlineOpenDetail = (taskId) => {
+  const handleOpenDetail = (taskId) => {
     setInlineStatusId(null);
     setSelectedTaskId(taskId);
   };
 
+  // Footer colSpan = Name + Assignee + Due date + custom fields + "+" column
+  const footerColSpan = 3 + visibleFields.length + 1;
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 flex-shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 shrink-0">
         <button
           onClick={() => handleAddTask(statuses[0]?.id ?? null)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
@@ -175,7 +180,6 @@ const ListView = ({
           </svg>
           Add task
         </button>
-
         <span className="text-xs text-gray-400">{tasks.length} tasks</span>
       </div>
 
@@ -184,13 +188,16 @@ const ListView = ({
         <table className="w-full border-collapse">
           <thead className="sticky top-0 bg-white z-10">
             <tr className="border-b border-gray-200">
+              {/* Name — takes all remaining space */}
               <th className="text-left text-xs font-medium text-gray-500 py-2 pl-10 pr-2">
                 Name
               </th>
-              <th className="text-left text-xs font-medium text-gray-500 py-2 px-2 w-24">
+              {/* Assignee — fixed 120px */}
+              <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-[120px]">
                 Assignee
               </th>
-              <th className="text-left text-xs font-medium text-gray-500 py-2 px-2 w-28">
+              {/* Due date — fixed 100px */}
+              <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-[100px]">
                 Due date
               </th>
 
@@ -198,14 +205,14 @@ const ListView = ({
               {visibleFields.map((field) => (
                 <th
                   key={field.id}
-                  className="text-left text-xs font-medium text-gray-500 py-2 px-2 w-28 whitespace-nowrap"
+                  className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-28 whitespace-nowrap"
                 >
                   {field.name}
                 </th>
               ))}
 
-              {/* + button to add columns */}
-              <th className="py-2 px-2 w-10 text-right">
+              {/* + button — add custom columns */}
+              <th className="py-2 px-2 w-8 text-right">
                 <div className="relative inline-block">
                   <button
                     onClick={() => setShowColumnMenu((v) => !v)}
@@ -217,29 +224,26 @@ const ListView = ({
                     </svg>
                   </button>
 
-                  {showColumnMenu && customFields.length > 0 && (
+                  {showColumnMenu && (
                     <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-xl border border-gray-200 z-30 p-3">
-                      <p className="text-xs font-semibold text-gray-700 mb-2">Toggle columns</p>
-                      {customFields.map((field) => (
-                        <label
-                          key={field.id}
-                          className="flex items-center gap-2 py-1 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={visibleFieldIds.includes(field.id)}
-                            onChange={() => toggleField(field.id)}
-                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <span className="text-xs text-gray-700">{field.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-
-                  {showColumnMenu && customFields.length === 0 && (
-                    <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-xl border border-gray-200 z-30 p-3">
-                      <p className="text-xs text-gray-400">No custom fields yet.</p>
+                      {customFields.length === 0 ? (
+                        <p className="text-xs text-gray-400">No custom fields yet.</p>
+                      ) : (
+                        <>
+                          <p className="text-xs font-semibold text-gray-700 mb-2">Toggle columns</p>
+                          {customFields.map((field) => (
+                            <label key={field.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={visibleFieldIds.includes(field.id)}
+                                onChange={() => toggleField(field.id)}
+                                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <span className="text-xs text-gray-700">{field.name}</span>
+                            </label>
+                          ))}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -257,18 +261,18 @@ const ListView = ({
               projectId={projectId}
               projectMembers={projectMembers}
               inlineStatusId={inlineStatusId}
-              onTaskClick={(t) => setSelectedTaskId(t.id)}
+              onUpdated={onTaskUpdated}
               onAddTask={handleAddTask}
+              onOpenDetail={handleOpenDetail}
               onInlineCreated={handleInlineCreated}
               onInlineClose={handleInlineClose}
-              onInlineOpenDetail={handleInlineOpenDetail}
             />
           ))}
 
           {/* Add section footer */}
           <tbody>
             <tr>
-              <td colSpan={colCount + 1} className="py-3 pl-4">
+              <td colSpan={footerColSpan} className="py-3 pl-4">
                 <button className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors">
                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -281,7 +285,7 @@ const ListView = ({
         </table>
       </div>
 
-      {/* Task detail side panel */}
+      {/* Task detail side panel — opened only via the row's arrow button */}
       {selectedTaskId && (
         <TaskDetailModal
           taskId={selectedTaskId}

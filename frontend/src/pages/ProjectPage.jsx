@@ -382,7 +382,10 @@ const ProjectPage = () => {
 
   // ── Task mutation handlers (keep shared state in sync) ─────────────────────
   const handleTaskCreated = useCallback((newTask) => {
-    setTasks((prev) => [...prev, newTask]);
+    setTasks((prev) => {
+      if (prev.find((t) => t.id === newTask.id)) return prev;
+      return [...prev, newTask];
+    });
   }, []);
 
   const handleTaskUpdated = useCallback((updatedTask) => {
