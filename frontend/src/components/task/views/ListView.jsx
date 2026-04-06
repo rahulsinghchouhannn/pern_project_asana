@@ -3,6 +3,7 @@ import TaskRow from "../TaskRow";
 import TaskDetailModal from "../TaskDetailModal";
 import InlineTaskRow from "../InlineTaskRow";
 import customFieldService from "@/services/customFieldService";
+import AddCustomFieldModal from "@/components/customFields/AddCustomFieldModal";
 
 const ChevronIcon = ({ open }) => (
   <svg
@@ -144,7 +145,7 @@ const ListView = ({
   const [customFields, setCustomFields] = useState([]);
   const [visibleFieldIds, setVisibleFieldIds] = useState([]);
   const [fieldValuesMap, setFieldValuesMap] = useState({});
-  const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const [showAddField, setShowAddField] = useState(false);
 
   // Fetch custom field definitions — re-runs when a field is added/removed
   useEffect(() => {
@@ -175,10 +176,9 @@ const ListView = ({
       .catch(() => {});
   }, [projectId, customFieldsVersion]);
 
-  const toggleField = (fieldId) => {
-    setVisibleFieldIds((prev) =>
-      prev.includes(fieldId) ? prev.filter((id) => id !== fieldId) : [...prev, fieldId]
-    );
+  const handleFieldCreated = (field) => {
+    setCustomFields((prev) => [...prev, field]);
+    setVisibleFieldIds((prev) => [...prev, field.id]);
   };
 
   const visibleFields = customFields.filter((f) => visibleFieldIds.includes(f.id));
@@ -253,48 +253,17 @@ const ListView = ({
                 </th>
               ))}
 
-              {/* + button — toggle columns */}
+              {/* + button — add custom field */}
               <th className="py-2 px-2 w-8 text-right">
-                <div className="relative inline-block">
-                  <button
-                    onClick={() => setShowColumnMenu((v) => !v)}
-                    className="text-gray-400 hover:text-gray-600 transition-colors p-0.5 rounded hover:bg-gray-100"
-                    title="Add column"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                  </button>
-
-                  {showColumnMenu && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-20"
-                        onClick={() => setShowColumnMenu(false)}
-                      />
-                      <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-xl border border-gray-200 z-30 p-3">
-                        {customFields.length === 0 ? (
-                          <p className="text-xs text-gray-400">No custom fields yet.</p>
-                        ) : (
-                          <>
-                            <p className="text-xs font-semibold text-gray-700 mb-2">Toggle columns</p>
-                            {customFields.map((field) => (
-                              <label key={field.id} className="flex items-center gap-2 py-1 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={visibleFieldIds.includes(field.id)}
-                                  onChange={() => toggleField(field.id)}
-                                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                                <span className="text-xs text-gray-700">{field.name}</span>
-                              </label>
-                            ))}
-                          </>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
+                <button
+                  onClick={() => setShowAddField(true)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-0.5 rounded hover:bg-gray-100"
+                  title="Add custom field"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
               </th>
               {/* spacer */}
               <th />
@@ -337,6 +306,15 @@ const ListView = ({
           </tbody>
         </table>
       </div>
+
+      {/* Add custom field modal */}
+      {showAddField && (
+        <AddCustomFieldModal
+          projectId={projectId}
+          onCreated={handleFieldCreated}
+          onClose={() => setShowAddField(false)}
+        />
+      )}
 
       {/* Task detail side panel */}
       {selectedTaskId && (
