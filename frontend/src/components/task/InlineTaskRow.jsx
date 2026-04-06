@@ -88,9 +88,11 @@ const InlineTaskRow = ({
           statusId,
         });
         const newTask = res.data.data;
-        taskIdRef.current = newTask.id;
+        taskIdRef.current = null;
         creatingRef.current = false;
         onCreated?.(newTask);
+        setTitle("");
+        setTimeout(() => nameInputRef.current?.focus(), 0);
       } else {
         await taskService.updateTask(taskIdRef.current, { title: newTitle.trim() });
       }
