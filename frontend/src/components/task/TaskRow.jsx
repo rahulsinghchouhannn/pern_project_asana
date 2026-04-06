@@ -60,8 +60,21 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
   const debounceRef = useRef(null);
   // Tracks the last value known to be successfully persisted — used to revert on error
   const lastSavedRef = useRef(extractDisplayValue(field.type, initialValue));
+  // Tracks whether the cell is in any active edit state — prevents an incoming
+  // prop sync from overwriting text the user is currently typing
+  const activeEditRef = useRef(false);
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
+
+  // Sync from parent when initialValue reference changes (e.g. fieldValuesMap
+  // populates after the initial render, or after a customFieldsVersion refetch).
+  // Skipped while the user is actively editing so we don't clobber their input.
+  useEffect(() => {
+    if (activeEditRef.current) return;
+    const newVal = extractDisplayValue(field.type, initialValue);
+    setLocalValue(newVal);
+    lastSavedRef.current = newVal;
+  }, [initialValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doSave = async (value) => {
     const prev = lastSavedRef.current;
@@ -101,6 +114,7 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
           onBlur={() => {
             clearTimeout(debounceRef.current);
             doSave(localValue);
+            activeEditRef.current = false;
             setEditing(false);
           }}
           onClick={(e) => e.stopPropagation()}
@@ -110,7 +124,11 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
     }
     return (
       <button
-        onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          activeEditRef.current = true;
+          setEditing(true);
+        }}
         className={`w-full text-left text-xs px-1 py-0.5 rounded min-h-[22px] block transition-colors hover:bg-gray-100
           ${isEmpty ? "text-gray-200" : "text-gray-700"}`}
         title="Click to edit"
@@ -127,7 +145,11 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
     return (
       <div className="relative w-full">
         <button
-          onClick={(e) => { e.stopPropagation(); setShowDropdown((v) => !v); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            activeEditRef.current = true;
+            setShowDropdown((v) => !v);
+          }}
           className={`w-full text-left min-h-[22px] px-1 rounded transition-colors hover:bg-gray-100
             ${!localValue ? "text-gray-200" : ""}`}
         >
@@ -148,10 +170,18 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
 
         {showDropdown && (
           <>
-            <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => { activeEditRef.current = false; setShowDropdown(false); }}
+            />
             <div className="absolute z-20 left-0 top-full mt-0.5 w-40 bg-white border border-gray-200 rounded-xl shadow-xl py-1">
               <button
-                onClick={() => { setLocalValue(null); setShowDropdown(false); doSave(null); }}
+                onClick={() => {
+                  setLocalValue(null);
+                  activeEditRef.current = false;
+                  setShowDropdown(false);
+                  doSave(null);
+                }}
                 className="w-full text-left px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-50"
               >
                 — Clear
@@ -159,7 +189,12 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
               {options.map((o) => (
                 <button
                   key={o.value}
-                  onClick={() => { setLocalValue(o.value); setShowDropdown(false); doSave(o.value); }}
+                  onClick={() => {
+                    setLocalValue(o.value);
+                    activeEditRef.current = false;
+                    setShowDropdown(false);
+                    doSave(o.value);
+                  }}
                   className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                 >
                   {o.color && (
@@ -186,7 +221,11 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
     return (
       <div className="relative w-full">
         <button
-          onClick={(e) => { e.stopPropagation(); setShowDate((v) => !v); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            activeEditRef.current = true;
+            setShowDate((v) => !v);
+          }}
           className={`w-full text-left text-xs min-h-[22px] px-1 rounded transition-colors hover:bg-gray-100
             ${dateStr ? "text-gray-700" : "text-gray-200"}`}
         >
@@ -198,10 +237,11 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
             onChange={(date) => {
               const iso = date ? date.toISOString() : null;
               setLocalValue(iso);
+              activeEditRef.current = false;
               setShowDate(false);
               doSave(iso);
             }}
-            onClose={() => setShowDate(false)}
+            onClose={() => { activeEditRef.current = false; setShowDate(false); }}
           />
         )}
       </div>
