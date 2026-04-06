@@ -251,6 +251,32 @@ const getTaskFieldValues = async (taskId) => {
   return rows;
 };
 
+const getProjectTaskFieldValues = async (projectId) => {
+  const rows = await db
+    .select({
+      id: customFieldValues.id,
+      taskId: customFieldValues.taskId,
+      customFieldId: customFieldValues.customFieldId,
+      valueText: customFieldValues.valueText,
+      valueNumber: customFieldValues.valueNumber,
+      valueDate: customFieldValues.valueDate,
+      valueUserId: customFieldValues.valueUserId,
+      valueOption: customFieldValues.valueOption,
+    })
+    .from(customFieldValues)
+    .innerJoin(customFields, eq(customFieldValues.customFieldId, customFields.id))
+    .innerJoin(tasks, eq(customFieldValues.taskId, tasks.id))
+    .where(eq(tasks.projectId, projectId))
+    .orderBy(asc(customFields.position));
+
+  const map = {};
+  rows.forEach((r) => {
+    if (!map[r.taskId]) map[r.taskId] = [];
+    map[r.taskId].push(r);
+  });
+  return map;
+};
+
 const getBulkTaskFieldValues = async (taskIds) => {
   if (taskIds.length === 0) return {};
 
@@ -292,4 +318,5 @@ module.exports = {
   setTaskFieldValue,
   getTaskFieldValues,
   getBulkTaskFieldValues,
+  getProjectTaskFieldValues,
 };

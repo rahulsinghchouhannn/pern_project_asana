@@ -18,6 +18,9 @@ const customFieldService = {
     api.post(`/projects/${projectId}/custom-fields/reorder`, { orderedIds }, { headers: getOrgHeader() }),
 
   // ── Task field values ─────────────────────────────────────────────────────
+  getProjectFieldValues: (projectId) =>
+    api.get(`/projects/${projectId}/custom-fields/values`, { headers: getOrgHeader() }),
+
   getTaskFieldValues: (taskId) =>
     api.get(`/tasks/${taskId}/custom-field-values`, { headers: getOrgHeader() }),
 

@@ -303,6 +303,7 @@ const ProjectPage = () => {
 
   const [activeTab, setActiveTab] = useState("list");
   const [showCustomizeFields, setShowCustomizeFields] = useState(false);
+  const [customFieldsVersion, setCustomFieldsVersion] = useState(0);
 
   // ── Task state ─────────────────────────────────────────────────────────────
   const [tasks, setTasks] = useState([]);
@@ -529,7 +530,7 @@ const ProjectPage = () => {
     }
     switch (activeTab) {
       case "overview":  return <OverviewTab project={currentProject} members={members ?? []} tasks={tasks} />;
-      case "list":      return <ListView {...sharedProps} />;
+      case "list":      return <ListView {...sharedProps} customFieldsVersion={customFieldsVersion} />;
       case "board":     return <BoardView {...sharedProps} />;
       case "calendar":  return <CalendarView {...sharedProps} />;
       case "timeline":  return <TimelineView {...sharedProps} />;
@@ -571,6 +572,7 @@ const ProjectPage = () => {
         <CustomFieldsManager
           projectId={id}
           onClose={() => setShowCustomizeFields(false)}
+          onFieldsChanged={() => setCustomFieldsVersion((v) => v + 1)}
         />
       )}
 

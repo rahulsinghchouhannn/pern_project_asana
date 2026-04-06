@@ -12,6 +12,7 @@ const {
 } = require("../validators/customFieldValidator");
 const {
   getProjectFields,
+  getProjectFieldValues,
   createField,
   updateField,
   deleteField,
@@ -29,6 +30,7 @@ const projectFieldRouter = express.Router({ mergeParams: true });
 projectFieldRouter.use(authMiddleware, orgMiddleware);
 
 projectFieldRouter.get("/", getProjectFields);
+projectFieldRouter.get("/values", getProjectFieldValues);
 projectFieldRouter.post("/", requirePermission(PERMISSIONS.MANAGE_CUSTOM_FIELDS), validateRequest(createFieldSchema), createField);
 projectFieldRouter.post("/reorder", validateRequest(reorderFieldsSchema), reorderFields);
 projectFieldRouter.put("/:fieldId", validateRequest(updateFieldSchema), updateField);

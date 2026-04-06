@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import taskService from "@/services/taskService";
+import customFieldService from "@/services/customFieldService";
 import AssigneeDropdown from "./AssigneeDropdown";
 import DueDatePicker from "./DueDatePicker";
 
@@ -30,52 +31,195 @@ const getDueDateDisplay = (dateVal) => {
   return { label, color: diffDays < 0 ? "text-red-500" : "text-gray-500" };
 };
 
-const renderFieldValue = (field, value) => {
-  if (!value) return <span className="text-gray-300">—</span>;
-  switch (field.type) {
-    case "text":
-      return <span className="truncate max-w-[100px] block">{value.valueText ?? "—"}</span>;
-    case "number":
-      return <span>{value.valueNumber ?? "—"}</span>;
-    case "date":
-      return (
-        <span>
-          {value.valueDate
-            ? new Date(value.valueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-            : "—"}
-        </span>
-      );
-    case "dropdown": {
-      if (!value.valueOption) return <span className="text-gray-300">—</span>;
-      const opt = (field.options ?? []).find((o) => o.value === value.valueOption);
-      return (
-        <span
-          className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium"
-          style={{
-            backgroundColor: opt?.color ? opt.color + "22" : "#e5e7eb",
-            color: opt?.color ?? "#6b7280",
-          }}
-        >
-          {value.valueOption}
-        </span>
-      );
-    }
-    default:
-      return <span className="text-gray-300">—</span>;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const extractDisplayValue = (fieldType, valueObj) => {
+  if (!valueObj) return null;
+  switch (fieldType) {
+    case "text":     return valueObj.valueText ?? null;
+    case "number":   return valueObj.valueNumber != null ? Number(valueObj.valueNumber) : null;
+    case "date":     return valueObj.valueDate ?? null;
+    case "dropdown": return valueObj.valueOption ?? null;
+    default:         return null;
   }
 };
 
-/**
- * TaskRow — inline-editable row for an existing task.
- * All field changes auto-save with 500ms debounce (title) or immediately (assignee, due date).
- * The right-arrow button opens the full TaskDetailModal.
- */
+// ─── CustomFieldCell ──────────────────────────────────────────────────────────
+//
+// Inline-editable cell for a single custom field value.
+// - Text/number: click to edit, blur saves (500ms debounce while typing)
+// - Dropdown: click opens a popover, selection saves immediately
+// - Date: click opens DueDatePicker, selection saves immediately
+// - Saves silently in background; reverts to last saved value on failure
+//
+const CustomFieldCell = ({ field, initialValue, taskId }) => {
+  const [localValue, setLocalValue] = useState(() => extractDisplayValue(field.type, initialValue));
+  const [editing, setEditing] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showDate, setShowDate] = useState(false);
+  const debounceRef = useRef(null);
+  // Tracks the last value known to be successfully persisted — used to revert on error
+  const lastSavedRef = useRef(extractDisplayValue(field.type, initialValue));
+
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+
+  const doSave = async (value) => {
+    const prev = lastSavedRef.current;
+    try {
+      const body = {};
+      switch (field.type) {
+        case "text":     body.valueText    = value;  break;
+        case "number":   body.valueNumber  = value;  break;
+        case "date":     body.valueDate    = value;  break;
+        case "dropdown": body.valueOption  = value;  break;
+      }
+      await customFieldService.setTaskFieldValue(taskId, field.id, body);
+      lastSavedRef.current = value;
+    } catch {
+      setLocalValue(prev); // revert on failure
+    }
+  };
+
+  // ── Text / Number ─────────────────────────────────────────────────────────────
+  if (field.type === "text" || field.type === "number") {
+    const isEmpty = localValue == null || localValue === "";
+    if (editing) {
+      return (
+        <input
+          autoFocus
+          type={field.type === "number" ? "number" : "text"}
+          value={localValue ?? ""}
+          onChange={(e) => {
+            const raw = e.target.value;
+            const v = field.type === "number"
+              ? (raw === "" ? null : Number(raw))
+              : (raw || null);
+            setLocalValue(v);
+            clearTimeout(debounceRef.current);
+            debounceRef.current = setTimeout(() => doSave(v), 500);
+          }}
+          onBlur={() => {
+            clearTimeout(debounceRef.current);
+            doSave(localValue);
+            setEditing(false);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="w-full text-xs bg-white border border-indigo-300 rounded px-1 py-0.5 outline-none"
+        />
+      );
+    }
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+        className={`w-full text-left text-xs px-1 py-0.5 rounded min-h-[22px] block transition-colors hover:bg-gray-100
+          ${isEmpty ? "text-gray-200" : "text-gray-700"}`}
+        title="Click to edit"
+      >
+        {isEmpty ? "—" : String(localValue)}
+      </button>
+    );
+  }
+
+  // ── Dropdown ──────────────────────────────────────────────────────────────────
+  if (field.type === "dropdown") {
+    const options = field.options ?? [];
+    const opt = options.find((o) => o.value === localValue);
+    return (
+      <div className="relative w-full">
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowDropdown((v) => !v); }}
+          className={`w-full text-left min-h-[22px] px-1 rounded transition-colors hover:bg-gray-100
+            ${!localValue ? "text-gray-200" : ""}`}
+        >
+          {localValue ? (
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: opt?.color ? opt.color + "22" : "#e5e7eb",
+                color: opt?.color ?? "#6b7280",
+              }}
+            >
+              {localValue}
+            </span>
+          ) : (
+            <span className="text-xs">—</span>
+          )}
+        </button>
+
+        {showDropdown && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />
+            <div className="absolute z-20 left-0 top-full mt-0.5 w-40 bg-white border border-gray-200 rounded-xl shadow-xl py-1">
+              <button
+                onClick={() => { setLocalValue(null); setShowDropdown(false); doSave(null); }}
+                className="w-full text-left px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-50"
+              >
+                — Clear
+              </button>
+              {options.map((o) => (
+                <button
+                  key={o.value}
+                  onClick={() => { setLocalValue(o.value); setShowDropdown(false); doSave(o.value); }}
+                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                >
+                  {o.color && (
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: o.color }}
+                    />
+                  )}
+                  {o.value}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ── Date ──────────────────────────────────────────────────────────────────────
+  if (field.type === "date") {
+    const dateStr = localValue
+      ? new Date(localValue).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : null;
+    return (
+      <div className="relative w-full">
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowDate((v) => !v); }}
+          className={`w-full text-left text-xs min-h-[22px] px-1 rounded transition-colors hover:bg-gray-100
+            ${dateStr ? "text-gray-700" : "text-gray-200"}`}
+        >
+          {dateStr ?? "—"}
+        </button>
+        {showDate && (
+          <DueDatePicker
+            value={localValue}
+            onChange={(date) => {
+              const iso = date ? date.toISOString() : null;
+              setLocalValue(iso);
+              setShowDate(false);
+              doSave(iso);
+            }}
+            onClose={() => setShowDate(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return <span className="text-xs text-gray-300">—</span>;
+};
+
+// ─── TaskRow ──────────────────────────────────────────────────────────────────
+
 const TaskRow = ({
   task,
   projectId,
   projectMembers = [],
   customFields = [],
   visibleFieldIds = [],
+  fieldValues = [],
   onUpdated,
   onOpenDetail,
 }) => {
@@ -124,7 +268,7 @@ const TaskRow = ({
         : await taskService.reopenTask(task.id);
       onUpdated?.(res.data.data);
     } catch {
-      setIsCompleted(!next); // revert on failure
+      setIsCompleted(!next);
     }
   };
 
@@ -168,7 +312,6 @@ const TaskRow = ({
             title={isCompleted ? "Reopen" : "Complete"}
           />
 
-          {/* Editable title — no border at rest, focus ring when active */}
           <input
             type="text"
             value={title}
@@ -185,7 +328,6 @@ const TaskRow = ({
             </span>
           )}
 
-          {/* Arrow to open full detail panel — visible on hover */}
           <button
             onClick={(e) => { e.stopPropagation(); onOpenDetail?.(task.id); }}
             title="Open detail"
@@ -269,15 +411,20 @@ const TaskRow = ({
       {/* ── Custom field cells ────────────────────────────── */}
       {visibleFieldIds.map((fieldId) => {
         const field = customFields.find((f) => f.id === fieldId);
-        if (!field) return <td key={fieldId} className="py-0 px-3 w-28" />;
-        const value = (task.customFieldValues ?? []).find((v) => v.customFieldId === fieldId);
+        if (!field) return <td key={fieldId} className="py-0 px-3 w-28 border-r border-gray-200" />;
+        const value = fieldValues.find((v) => v.customFieldId === fieldId);
         return (
-          <td key={fieldId} className="py-0 px-3 w-28 text-xs text-gray-600">
-            {renderFieldValue(field, value)}
+          <td key={fieldId} className="py-0 px-2 w-28 border-r border-gray-200">
+            <CustomFieldCell
+              field={field}
+              initialValue={value}
+              taskId={task.id}
+            />
           </td>
         );
       })}
-      {/* spacer — matches header spacer, absorbs remaining width */}
+
+      {/* spacer */}
       <td />
     </tr>
   );

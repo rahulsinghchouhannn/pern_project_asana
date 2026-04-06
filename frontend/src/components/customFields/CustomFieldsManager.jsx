@@ -11,7 +11,7 @@ const FIELD_TYPE_ICONS = {
   user:     "👤",
 };
 
-const CustomFieldsManager = ({ projectId, onClose }) => {
+const CustomFieldsManager = ({ projectId, onClose, onFieldsChanged }) => {
   const [fields, setFields] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -27,12 +27,14 @@ const CustomFieldsManager = ({ projectId, onClose }) => {
 
   const handleFieldCreated = (field) => {
     setFields((prev) => [...prev, field]);
+    onFieldsChanged?.();
   };
 
   const handleDelete = async (fieldId) => {
     try {
       await customFieldService.deleteField(projectId, fieldId);
       setFields((prev) => prev.filter((f) => f.id !== fieldId));
+      onFieldsChanged?.();
     } catch (err) {
       console.error(err);
     } finally {

@@ -38,6 +38,13 @@ const reorderFields = asyncHandler(async (req, res) => {
   res.json(successResponse({ reordered: true }));
 });
 
+// GET /api/projects/:projectId/custom-fields/values
+const getProjectFieldValues = asyncHandler(async (req, res) => {
+  const { projectId } = req.params;
+  const map = await customFieldService.getProjectTaskFieldValues(projectId);
+  res.json(successResponse(map));
+});
+
 // GET /api/tasks/:taskId/custom-field-values
 const getTaskFieldValues = asyncHandler(async (req, res) => {
   const { taskId } = req.params;
@@ -54,6 +61,7 @@ const setTaskFieldValue = asyncHandler(async (req, res) => {
 
 module.exports = {
   getProjectFields,
+  getProjectFieldValues,
   createField,
   updateField,
   deleteField,
