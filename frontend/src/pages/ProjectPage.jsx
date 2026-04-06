@@ -351,13 +351,35 @@ const ProjectPage = () => {
     loadTasks();
   }, [loadTasks]);
 
+  // Tracks task IDs created by this client so the socket echo can be ignored.
+  const locallyCreatedIds = useRef(new Set());
+  // Counter incremented before each createTask call (before the await).
+  // While > 0 the socket handler buffers task:created events instead of
+  // adding them to state immediately — avoids the race where the server emits
+  // the socket event before it sends the HTTP response.
+  const pendingCreateCount = useRef(0);
+  const socketCreateBuffer = useRef([]);
+
   // ── Socket: join project room and sync real-time task events ───────────────
   useEffect(() => {
     if (!id) return;
 
     socketService.emit("join_project", id);
 
-    const handleTaskCreated = (task) => {
+    const handleSocketTaskCreated = (task) => {
+      // The server emits task:created BEFORE sending the HTTP response.
+      // If a local create is in flight (pendingCreateCount > 0), buffer the
+      // event — we don't yet know if this is our own task or another user's.
+      // onSilentSave will flush the buffer once the HTTP response arrives,
+      // suppressing our own task ID via locallyCreatedIds.
+      if (pendingCreateCount.current > 0) {
+        socketCreateBuffer.current.push(task);
+        return;
+      }
+      if (locallyCreatedIds.current.has(task.id)) {
+        locallyCreatedIds.current.delete(task.id);
+        return;
+      }
       setTasks((prev) => {
         if (prev.find((t) => t.id === task.id)) return prev;
         return [...prev, task];
@@ -370,22 +392,53 @@ const ProjectPage = () => {
       );
     };
 
-    socketService.on("task:created", handleTaskCreated);
+    socketService.on("task:created", handleSocketTaskCreated);
     socketService.on("task:updated", handleTaskUpdated);
 
     return () => {
       socketService.emit("leave_project", id);
-      socketService.off("task:created", handleTaskCreated);
+      socketService.off("task:created", handleSocketTaskCreated);
       socketService.off("task:updated", handleTaskUpdated);
     };
   }, [id]);
 
   // ── Task mutation handlers (keep shared state in sync) ─────────────────────
   const handleTaskCreated = useCallback((newTask) => {
+    // Register this ID so the socket echo is suppressed.
+    locallyCreatedIds.current.add(newTask.id);
     setTasks((prev) => {
       if (prev.find((t) => t.id === newTask.id)) return prev;
       return [...prev, newTask];
     });
+  }, []);
+
+  // Called synchronously BEFORE createTask is awaited so pendingCreateCount
+  // is already > 0 when the socket event arrives.
+  const handleBeforeCreate = useCallback(() => {
+    pendingCreateCount.current += 1;
+  }, []);
+
+  // Called after createTask resolves (taskId on success, null on error).
+  // Decrements the counter and flushes the socket buffer — any buffered events
+  // for other users' tasks are added to state; our own task (identified by
+  // taskId) is suppressed via locallyCreatedIds until the user finalizes.
+  const handleTaskSilentSave = useCallback((taskId) => {
+    if (taskId !== null) {
+      locallyCreatedIds.current.add(taskId);
+    }
+    pendingCreateCount.current = Math.max(0, pendingCreateCount.current - 1);
+    if (pendingCreateCount.current === 0) {
+      const buffered = socketCreateBuffer.current;
+      socketCreateBuffer.current = [];
+      setTasks((prev) => {
+        let next = prev;
+        for (const task of buffered) {
+          if (locallyCreatedIds.current.has(task.id)) continue; // our task — skip
+          if (!next.find((t) => t.id === task.id)) next = [...next, task];
+        }
+        return next;
+      });
+    }
   }, []);
 
   const handleTaskUpdated = useCallback((updatedTask) => {
@@ -462,6 +515,8 @@ const ProjectPage = () => {
     projectMembers: members ?? [],
     onTaskCreated: handleTaskCreated,
     onTaskUpdated: handleTaskUpdated,
+    onTaskBeforeCreate: handleBeforeCreate,
+    onTaskSilentSave: handleTaskSilentSave,
   };
 
   const renderTab = () => {

@@ -44,9 +44,11 @@ const formatDueDate = (date) => {
  *  projectId       – UUID of the project
  *  projectMembers  – array of { userId, name, email, avatarUrl }
  *  colCount        – total number of columns in the table (default 3)
- *  onCreated(task) – called once when the task is first created
- *  onClose()       – called when the row should be dismissed
- *  onOpenDetail(id)– called when the user clicks the arrow to open task detail
+ *  onCreated(task)    – called when the user finalizes (blur/Enter); parent adds task to list and closes row
+ *  onBeforeCreate()   – called synchronously BEFORE the createTask API call; parent increments a buffer counter
+ *  onSilentSave(id|null) – called after create resolves (id on success, null on error); parent flushes buffer
+ *  onClose()          – called when the row should be dismissed with no task
+ *  onOpenDetail(id)   – called when the user clicks the arrow to open task detail
  */
 const InlineTaskRow = ({
   statusId,
@@ -54,6 +56,8 @@ const InlineTaskRow = ({
   projectMembers = [],
   colCount = 3,
   onCreated,
+  onBeforeCreate,
+  onSilentSave,
   onClose,
   onOpenDetail,
 }) => {
@@ -65,8 +69,11 @@ const InlineTaskRow = ({
   const [saving, setSaving] = useState(false);
 
   const nameInputRef = useRef(null);
+  const rowRef = useRef(null);
   // Stable ref so async callbacks always read the latest task id
   const taskIdRef = useRef(null);
+  // Stores the full task object returned by the backend after first save
+  const taskRef = useRef(null);
   // Guard: prevents two concurrent create requests when user types fast
   const creatingRef = useRef(false);
   const debounceRef = useRef(null);
@@ -76,37 +83,70 @@ const InlineTaskRow = ({
     return () => clearTimeout(debounceRef.current);
   }, []);
 
+  // Returns the saved task (create or update), or null on guard/error.
+  // Does NOT notify the parent — callers decide when to finalize.
   const createOrUpdateTitle = async (newTitle) => {
-    if (!newTitle.trim()) return;
-    if (creatingRef.current) return; // prevent concurrent creates
+    if (!newTitle.trim()) return null;
+    if (creatingRef.current) return null; // prevent concurrent creates
     setSaving(true);
     try {
       if (!taskIdRef.current) {
+        // onBeforeCreate MUST be called synchronously before the await so the
+        // parent's pendingCreateCount is > 0 before the event loop is freed.
+        // The server emits task:created before sending the HTTP response, so the
+        // socket event arrives while this await is still pending — the counter
+        // ensures the socket handler buffers that event instead of adding the
+        // task to the list prematurely.
+        onBeforeCreate?.();
         creatingRef.current = true;
-        const res = await taskService.createTask(projectId, {
-          title: newTitle.trim(),
-          statusId,
-        });
-        const newTask = res.data.data;
-        taskIdRef.current = null;
-        creatingRef.current = false;
-        onCreated?.(newTask);
-        setTitle("");
-        setTimeout(() => nameInputRef.current?.focus(), 0);
+        try {
+          const res = await taskService.createTask(projectId, {
+            title: newTitle.trim(),
+            statusId,
+          });
+          const newTask = res.data.data;
+          taskIdRef.current = newTask.id;
+          taskRef.current = newTask;
+          creatingRef.current = false;
+          onSilentSave?.(newTask.id); // decrement counter, flush buffer (task ID suppressed)
+          return newTask;
+        } catch {
+          creatingRef.current = false;
+          onSilentSave?.(null); // decrement counter, flush buffer without suppressing any task
+          return null;
+        }
       } else {
         await taskService.updateTask(taskIdRef.current, { title: newTitle.trim() });
+        if (taskRef.current) taskRef.current = { ...taskRef.current, title: newTitle.trim() };
+        return taskRef.current;
       }
     } catch {
-      creatingRef.current = false; // allow retry on error
+      creatingRef.current = false;
+      return null;
     } finally {
       setSaving(false);
     }
+  };
+
+  // Called on Enter or blur-outside: flush debounce, save, tell parent, close.
+  const finalize = () => {
+    clearTimeout(debounceRef.current);
+    if (!title.trim() && !taskIdRef.current) {
+      onClose?.();
+      return;
+    }
+    createOrUpdateTitle(title).then(() => {
+      const saved = taskRef.current;
+      if (saved) onCreated?.(saved); // parent adds to list and closes the row
+      else onClose?.();
+    });
   };
 
   const handleTitleChange = (e) => {
     const val = e.target.value;
     setTitle(val);
     clearTimeout(debounceRef.current);
+    // Debounce saves silently — does NOT close the row or notify the parent.
     debounceRef.current = setTimeout(() => createOrUpdateTitle(val), 500);
   };
 
@@ -116,9 +156,16 @@ const InlineTaskRow = ({
       onClose?.();
     }
     if (e.key === "Enter") {
-      clearTimeout(debounceRef.current);
-      createOrUpdateTitle(title);
+      e.preventDefault();
+      finalize();
     }
+  };
+
+  const handleBlur = (e) => {
+    // If focus moves to another element inside this row (assignee button,
+    // date picker, detail arrow) do nothing — the row is still active.
+    if (rowRef.current?.contains(e.relatedTarget)) return;
+    finalize();
   };
 
   const handleAssigneeSelect = async (member) => {
@@ -153,7 +200,7 @@ const InlineTaskRow = ({
   const dateDisplay = formatDueDate(dueDate);
 
   return (
-    <tr className="border-b border-gray-100 bg-indigo-50/20">
+    <tr ref={rowRef} className="border-b border-gray-100 bg-indigo-50/20">
       {/* Name column */}
       <td className="py-2 pl-8 pr-2 overflow-hidden border-r border-gray-200">
         <div className="flex items-center gap-2 group">
@@ -166,6 +213,7 @@ const InlineTaskRow = ({
             value={title}
             onChange={handleTitleChange}
             onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
             placeholder="Write a task name"
             className="flex-1 text-sm outline-none bg-transparent placeholder-gray-400 text-gray-800 min-w-0"
           />

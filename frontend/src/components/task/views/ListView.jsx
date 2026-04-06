@@ -29,6 +29,8 @@ const StatusSection = ({
   onAddTask,
   onOpenDetail,
   onInlineCreated,
+  onInlineBeforeCreate,
+  onInlineSilentSave,
   onInlineClose,
 }) => {
   const [open, setOpen] = useState(true);
@@ -85,6 +87,8 @@ const StatusSection = ({
           projectMembers={projectMembers}
           colCount={3 + visibleFieldIds.length}
           onCreated={onInlineCreated}
+          onBeforeCreate={onInlineBeforeCreate}
+          onSilentSave={onInlineSilentSave}
           onClose={onInlineClose}
           onOpenDetail={onOpenDetail}
         />
@@ -119,6 +123,8 @@ const ListView = ({
   projectMembers = [],
   onTaskCreated,
   onTaskUpdated,
+  onTaskBeforeCreate,
+  onTaskSilentSave,
 }) => {
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [inlineStatusId, setInlineStatusId] = useState(null);
@@ -156,8 +162,13 @@ const ListView = ({
 
   const handleInlineCreated = (newTask) => {
     onTaskCreated?.(newTask);
-    // Row stays open so user can keep typing another task
+    setInlineStatusId(null); // close the row — user re-opens with "Add task" for the next one
   };
+
+  const handleInlineBeforeCreate = () => onTaskBeforeCreate?.();
+  // Called right after the debounce saves: suppresses the socket echo so the
+  // task doesn't appear as a TaskRow while InlineTaskRow is still open.
+  const handleInlineSilentSave = (taskId) => onTaskSilentSave?.(taskId);
 
   const handleOpenDetail = (taskId) => {
     setInlineStatusId(null);
@@ -267,6 +278,8 @@ const ListView = ({
               onAddTask={handleAddTask}
               onOpenDetail={handleOpenDetail}
               onInlineCreated={handleInlineCreated}
+              onInlineBeforeCreate={handleInlineBeforeCreate}
+              onInlineSilentSave={handleInlineSilentSave}
               onInlineClose={handleInlineClose}
             />
           ))}
