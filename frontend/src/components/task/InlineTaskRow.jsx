@@ -76,6 +76,9 @@ const InlineTaskRow = ({
   const taskRef = useRef(null);
   // Guard: prevents two concurrent create requests when user types fast
   const creatingRef = useRef(false);
+  // Stores the in-flight create promise so finalize() can await it instead of
+  // getting null and closing the row before the HTTP response arrives.
+  const pendingCreateRef = useRef(null);
   const debounceRef = useRef(null);
 
   useEffect(() => {
@@ -87,7 +90,11 @@ const InlineTaskRow = ({
   // Does NOT notify the parent — callers decide when to finalize.
   const createOrUpdateTitle = async (newTitle) => {
     if (!newTitle.trim()) return null;
-    if (creatingRef.current) return null; // prevent concurrent creates
+    // If a create is already in-flight (e.g. debounce fired before Enter/blur),
+    // return the pending promise so the caller waits for it rather than getting
+    // null immediately (which would cause finalize() to call onClose() before
+    // taskRef.current is set, making the task invisible after creation).
+    if (creatingRef.current) return pendingCreateRef.current;
     setSaving(true);
     try {
       if (!taskIdRef.current) {
@@ -99,6 +106,8 @@ const InlineTaskRow = ({
         // task to the list prematurely.
         onBeforeCreate?.();
         creatingRef.current = true;
+        let resolveCreate;
+        pendingCreateRef.current = new Promise((resolve) => { resolveCreate = resolve; });
         try {
           const res = await taskService.createTask(projectId, {
             title: newTitle.trim(),
@@ -109,10 +118,14 @@ const InlineTaskRow = ({
           taskRef.current = newTask;
           creatingRef.current = false;
           onSilentSave?.(newTask.id); // decrement counter, flush buffer (task ID suppressed)
+          resolveCreate(newTask);
+          pendingCreateRef.current = null;
           return newTask;
         } catch {
           creatingRef.current = false;
           onSilentSave?.(null); // decrement counter, flush buffer without suppressing any task
+          resolveCreate(null);
+          pendingCreateRef.current = null;
           return null;
         }
       } else {

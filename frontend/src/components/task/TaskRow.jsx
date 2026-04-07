@@ -401,7 +401,7 @@ const TaskRow = ({
       </td>
 
       {/* ── Assignee ─────────────────────────────────────── */}
-      <td className="py-0 px-3 w-[160px] relative border-r border-gray-200">
+      <td className="py-0 px-3 w-40 relative border-r border-gray-200">
         <button
           onClick={(e) => { e.stopPropagation(); setShowAssignee((v) => !v); setShowDatePicker(false); }}
           className="flex items-center gap-1.5 max-w-full"
@@ -423,7 +423,7 @@ const TaskRow = ({
                   {getInitials(primaryAssignee.name ?? "")}
                 </div>
               )}
-              <span className="text-xs text-gray-600 truncate max-w-[72px]">{firstName}</span>
+              <span className="text-xs text-gray-600 truncate max-w-18">{firstName}</span>
             </>
           ) : (
             <svg className="w-5 h-5 text-gray-200 hover:text-gray-400 transition-colors" fill="currentColor" viewBox="0 0 24 24">
@@ -443,7 +443,7 @@ const TaskRow = ({
       </td>
 
       {/* ── Due date ─────────────────────────────────────── */}
-      <td className="py-0 px-3 w-[110px] relative border-r border-gray-200">
+      <td className="py-0 px-3 w-27.5 relative border-r border-gray-200">
         <button
           onClick={(e) => { e.stopPropagation(); setShowDatePicker((v) => !v); setShowAssignee(false); }}
           className="flex items-center"
