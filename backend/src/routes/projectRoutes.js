@@ -15,6 +15,7 @@ const {
   updateStatusSchema,
   reorderStatusesSchema,
 } = require("../validators/projectValidator");
+const { inviteToProjectSchema } = require("../validators/invitationValidator");
 
 const router = express.Router();
 
@@ -34,6 +35,9 @@ router.post("/:id/complete", projectController.complete);
 router.get("/:id/members", projectController.getMembers);
 router.post("/:id/members", validateRequest(addMemberSchema), projectController.addMember);
 router.delete("/:id/members/:userId", projectController.removeMember);
+
+// ── Invite via email ──────────────────────────────────────────────────────────
+router.post("/:id/invite", validateRequest(inviteToProjectSchema), projectController.inviteToProject);
 
 // ── Project member role override ──────────────────────────────────────────────
 router.put(

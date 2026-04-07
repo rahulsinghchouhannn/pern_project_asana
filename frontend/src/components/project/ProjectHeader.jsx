@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import Button from "@/components/ui/Button";
+import ShareProjectModal from "./ShareProjectModal";
 
 const ChevronIcon = () => (
   <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -38,6 +39,8 @@ const AvatarStack = ({ members }) => {
 };
 
 const ProjectHeader = ({ project, members = [], activeTab, onTabChange, tabs = [], onCustomize }) => {
+  const [shareOpen, setShareOpen] = useState(false);
+
   const isArchived = project.isArchived;
   const isCompleted = project.isCompleted;
 
@@ -79,7 +82,7 @@ const ProjectHeader = ({ project, members = [], activeTab, onTabChange, tabs = [
         {/* Right actions */}
         <div className="flex items-center gap-3 shrink-0 ml-4">
           <AvatarStack members={members} />
-          <Button variant="secondary" size="sm">
+          <Button variant="secondary" size="sm" onClick={() => setShareOpen(true)}>
             <ShareIcon />
             Share
           </Button>
@@ -105,6 +108,10 @@ const ProjectHeader = ({ project, members = [], activeTab, onTabChange, tabs = [
           </button>
         ))}
       </div>
+
+      {shareOpen && (
+        <ShareProjectModal project={project} onClose={() => setShareOpen(false)} />
+      )}
     </div>
   );
 };

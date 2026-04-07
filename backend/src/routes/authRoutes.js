@@ -8,6 +8,7 @@ const {
   magicLinkRequestSchema,
   magicLinkVerifySchema,
   refreshTokenSchema,
+  checkEmailSchema,
 } = require("../validators/authValidator");
 
 const router = express.Router();
@@ -19,5 +20,6 @@ router.post("/magic-link/verify", validateRequest(magicLinkVerifySchema), authCo
 router.post("/refresh", validateRequest(refreshTokenSchema), authController.refreshToken);
 router.post("/logout", validateRequest(refreshTokenSchema), authController.logout);
 router.get("/me", authMiddleware, authController.getMe);
+router.post("/check-email", validateRequest(checkEmailSchema), authController.checkEmail);
 
 module.exports = router;

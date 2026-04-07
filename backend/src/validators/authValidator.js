@@ -26,10 +26,15 @@ const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, { message: "Refresh token is required" }),
 });
 
+const checkEmailSchema = z.object({
+  email: z.string().email({ message: "Invalid email address" }),
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
   magicLinkRequestSchema,
   magicLinkVerifySchema,
   refreshTokenSchema,
+  checkEmailSchema,
 };

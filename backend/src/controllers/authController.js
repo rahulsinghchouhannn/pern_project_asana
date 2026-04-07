@@ -58,6 +58,16 @@ const getMe = asyncHandler(async (req, res) => {
   res.status(200).json(successResponse(user));
 });
 
+const checkEmail = asyncHandler(async (req, res) => {
+  const [user] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, req.validated.email))
+    .limit(1);
+
+  res.status(200).json(successResponse({ exists: !!user }));
+});
+
 module.exports = {
   register,
   login,
@@ -66,4 +76,5 @@ module.exports = {
   refreshToken,
   logout,
   getMe,
+  checkEmail,
 };

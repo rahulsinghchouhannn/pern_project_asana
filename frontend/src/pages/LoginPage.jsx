@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { loginUser, requestMagicLink } from "@/store/slices/authSlice";
 import Button from "@/components/ui/Button";
@@ -15,7 +15,10 @@ const STEP = {
 const LoginPage = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isLoading, error } = useAppSelector((s) => s.auth);
+
+  const redirectTo = searchParams.get("redirect") || "/";
 
   const [step, setStep] = useState(STEP.EMAIL);
   const [email, setEmail] = useState("");
@@ -29,9 +32,10 @@ const LoginPage = () => {
     if (loginUser.fulfilled.match(result)) {
       const { organizations } = result.payload ?? {};
       if (organizations && organizations.length > 1) {
-        navigate("/select-org");
+        // Preserve the redirect param through org selection
+        navigate(`/select-org?redirect=${encodeURIComponent(redirectTo)}`);
       } else {
-        navigate("/");
+        navigate(redirectTo);
       }
     } else {
       setFormError(result.payload || "Login failed");
@@ -160,7 +164,10 @@ const LoginPage = () => {
 
         <p className="text-center text-sm text-gray-500 mt-6">
           Don&apos;t have an account?{" "}
-          <Link to="/register" className="text-blue-600 hover:underline font-medium">
+          <Link
+            to={`/register${redirectTo !== "/" ? `?redirect=${encodeURIComponent(redirectTo)}` : ""}`}
+            className="text-blue-600 hover:underline font-medium"
+          >
             Sign up
           </Link>
         </p>

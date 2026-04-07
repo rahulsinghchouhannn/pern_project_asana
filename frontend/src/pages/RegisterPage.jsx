@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { registerUser } from "@/store/slices/authSlice";
 import Button from "@/components/ui/Button";
@@ -8,9 +8,14 @@ import Input from "@/components/ui/Input";
 const RegisterPage = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isLoading } = useAppSelector((s) => s.auth);
 
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  // Pre-fill email if passed in from an invitation link
+  const prefillEmail = searchParams.get("email") || "";
+  const redirectTo = searchParams.get("redirect") || "/";
+
+  const [form, setForm] = useState({ name: "", email: prefillEmail, password: "" });
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
 
@@ -40,7 +45,7 @@ const RegisterPage = () => {
 
     const result = await dispatch(registerUser(form));
     if (registerUser.fulfilled.match(result)) {
-      navigate("/");
+      navigate(redirectTo);
     } else {
       setFormError(result.payload || "Registration failed");
     }
@@ -109,7 +114,10 @@ const RegisterPage = () => {
 
         <p className="text-center text-sm text-gray-500 mt-6">
           Already have an account?{" "}
-          <Link to="/login" className="text-blue-600 hover:underline font-medium">
+          <Link
+            to={`/login${redirectTo !== "/" ? `?redirect=${encodeURIComponent(redirectTo)}` : ""}`}
+            className="text-blue-600 hover:underline font-medium"
+          >
             Log in
           </Link>
         </p>

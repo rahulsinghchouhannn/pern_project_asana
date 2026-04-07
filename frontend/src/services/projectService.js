@@ -45,6 +45,9 @@ const projectService = {
 
   reorderStatuses: (projectId, orderedIds) =>
     api.post(`/projects/${projectId}/statuses/reorder`, { orderedIds }, { headers: getOrgHeader() }),
+
+  inviteToProject: (projectId, email) =>
+    api.post(`/projects/${projectId}/invite`, { email }, { headers: getOrgHeader() }),
 };
 
 export default projectService;

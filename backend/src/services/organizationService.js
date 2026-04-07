@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const { eq, and, gt, desc, count } = require("drizzle-orm");
 const { db } = require("../db");
-const { organizations, organizationMembers, invitations, users, roles, rolePermissions, userRoles } = require("../db/schema");
+const { organizations, organizationMembers, invitations, users, roles, rolePermissions, userRoles, projectMembers } = require("../db/schema");
 const { ALL_PERMISSIONS, ADMIN_PERMISSIONS, MEMBER_PERMISSIONS } = require("../config/permissions");
 const activityService = require("./activityService");
 const notificationService = require("./notificationService");
@@ -326,18 +326,43 @@ const acceptInvitation = async (token, userId) => {
     )
     .limit(1);
 
-  if (!existing) {
-    await db.insert(organizationMembers).values({
-      organizationId: invitation.organizationId,
-      userId,
-      role: "member",
-    });
-  }
+  await db.transaction(async (tx) => {
+    // Add to org if not already a member
+    if (!existing) {
+      await tx.insert(organizationMembers).values({
+        organizationId: invitation.organizationId,
+        userId,
+        role: "member",
+      });
+    }
 
-  await db
-    .update(invitations)
-    .set({ status: "accepted" })
-    .where(eq(invitations.id, invitation.id));
+    // If this was a project-specific invitation, add to project members too
+    if (invitation.projectId) {
+      const [alreadyProjectMember] = await tx
+        .select({ id: projectMembers.id })
+        .from(projectMembers)
+        .where(
+          and(
+            eq(projectMembers.projectId, invitation.projectId),
+            eq(projectMembers.userId, userId)
+          )
+        )
+        .limit(1);
+
+      if (!alreadyProjectMember) {
+        await tx.insert(projectMembers).values({
+          projectId: invitation.projectId,
+          userId,
+          role: "member",
+        });
+      }
+    }
+
+    await tx
+      .update(invitations)
+      .set({ status: "accepted" })
+      .where(eq(invitations.id, invitation.id));
+  });
 
   activityService.log({
     orgId: invitation.organizationId,
@@ -350,14 +375,19 @@ const acceptInvitation = async (token, userId) => {
     actorId: invitation.invitedBy,
     orgId: invitation.organizationId,
     type: "invitation",
-    title: "You joined a new organization",
+    title: invitation.projectId
+      ? "You've been added to a project"
+      : "You joined a new organization",
     entityType: "project",
-    entityId: null,
+    entityId: invitation.projectId ?? null,
   }).catch((err) => logger.error({ message: "Failed to create invitation notification", err }));
 
   logger.info({ message: "Invitation accepted", orgId: invitation.organizationId, userId });
 
-  return { organizationId: invitation.organizationId };
+  return {
+    organizationId: invitation.organizationId,
+    projectId: invitation.projectId ?? null,
+  };
 };
 
 const rejectInvitation = async (token) => {

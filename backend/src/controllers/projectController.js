@@ -1,5 +1,6 @@
 const asyncHandler = require("../middleware/asyncHandler");
 const projectService = require("../services/projectService");
+const invitationService = require("../services/invitationService");
 const successResponse = require("../utils/successResponse");
 
 const create = asyncHandler(async (req, res) => {
@@ -115,6 +116,16 @@ const reorderStatuses = asyncHandler(async (req, res) => {
   res.status(200).json(successResponse(statuses));
 });
 
+const inviteToProject = asyncHandler(async (req, res) => {
+  const invitation = await invitationService.sendProjectInvitation(
+    req.params.id,
+    req.org.orgId,
+    req.user.userId,
+    req.validated.email
+  );
+  res.status(201).json(successResponse(invitation));
+});
+
 module.exports = {
   create,
   list,
@@ -131,4 +142,5 @@ module.exports = {
   updateStatus,
   deleteStatus,
   reorderStatuses,
+  inviteToProject,
 };

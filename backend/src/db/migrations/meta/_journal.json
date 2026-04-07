@@ -57,6 +57,13 @@
       "when": 1775202337333,
       "tag": "0007_light_mulholland_black",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775481789997,
+      "tag": "0008_loving_norrin_radd",
+      "breakpoints": true
     }
   ]
 }
