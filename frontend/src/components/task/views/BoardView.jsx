@@ -4,8 +4,6 @@ import TaskCard from "../TaskCard";
 import TaskDetailModal from "../TaskDetailModal";
 import CreateTaskModal from "../CreateTaskModal";
 import taskService from "@/services/taskService";
-import socketService from "@/services/socketService";
-import { useAppSelector } from "@/store/hooks";
 
 // Build column state from statuses + tasks
 const buildColumns = (statuses, tasks) =>
@@ -30,7 +28,6 @@ const BoardView = ({
   onTaskCreated,
   onTaskUpdated,
 }) => {
-  const { user } = useAppSelector((s) => s.auth);
   const [columns, setColumns] = useState(() => buildColumns(statuses, propTasks));
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [createForStatus, setCreateForStatus] = useState(null);
@@ -40,38 +37,8 @@ const BoardView = ({
     setColumns(buildColumns(statuses, propTasks));
   }, [propTasks, statuses]);
 
-  // Join/leave project room and listen for real-time task events
-  useEffect(() => {
-    if (!projectId) return;
-    socketService.emit("join_project", projectId);
-
-    const handleTaskUpdated = ({ taskId, statusId, position, actorId }) => {
-      // Skip if current user made this change (already applied optimistically)
-      if (actorId === user?.userId) return;
-      setColumns((prev) =>
-        prev.map((col) => ({
-          ...col,
-          tasks: col.tasks
-            .map((t) => (t.id === taskId ? { ...t, statusId, position } : t))
-            .filter((t) => t.statusId === col.statusId),
-        }))
-      );
-    };
-
-    const handleTaskCreated = (task) => {
-      if (task.actorId === user?.userId) return;
-      onTaskCreated?.(task);
-    };
-
-    socketService.on("task:updated", handleTaskUpdated);
-    socketService.on("task:created", handleTaskCreated);
-
-    return () => {
-      socketService.emit("leave_project", projectId);
-      socketService.off("task:updated", handleTaskUpdated);
-      socketService.off("task:created", handleTaskCreated);
-    };
-  }, [projectId, user?.userId, onTaskCreated]);
+  // columns are kept in sync by the useEffect([propTasks, statuses]) above;
+  // ProjectPage owns the socket subscription and propagates updates via propTasks.
 
   const onDragEnd = (result) => {
     const { source, destination, draggableId } = result;

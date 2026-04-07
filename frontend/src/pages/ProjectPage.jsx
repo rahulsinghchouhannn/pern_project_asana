@@ -393,13 +393,30 @@ const ProjectPage = () => {
       );
     };
 
+    const handleTaskDeleted = ({ taskId }) => {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    };
+
+    const handlePositionsUpdated = ({ updates }) => {
+      setTasks((prev) =>
+        prev.map((t) => {
+          const update = updates.find((u) => u.taskId === t.id);
+          return update ? { ...t, statusId: update.statusId, position: update.position } : t;
+        })
+      );
+    };
+
     socketService.on("task:created", handleSocketTaskCreated);
     socketService.on("task:updated", handleTaskUpdated);
+    socketService.on("task:deleted", handleTaskDeleted);
+    socketService.on("task:positions_updated", handlePositionsUpdated);
 
     return () => {
       socketService.emit("leave_project", id);
       socketService.off("task:created", handleSocketTaskCreated);
       socketService.off("task:updated", handleTaskUpdated);
+      socketService.off("task:deleted", handleTaskDeleted);
+      socketService.off("task:positions_updated", handlePositionsUpdated);
     };
   }, [id]);
 

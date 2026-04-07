@@ -368,14 +368,6 @@ const updateTask = async (taskId, userId, data) => {
             entityId: taskId,
           });
         }
-
-        // Emit to project room
-        emitToProject(existing.projectId, "task:updated", {
-          taskId,
-          statusId: data.statusId,
-          position: data.position ?? existing.position,
-          actorId: userId,
-        });
       })
       .catch((err) => logger.error({ message: "Failed to handle status_changed side effects", err }));
   }
@@ -419,10 +411,15 @@ const updateTask = async (taskId, userId, data) => {
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 const deleteTask = async (taskId) => {
-  const [task] = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  const [task] = await db
+    .select({ id: tasks.id, projectId: tasks.projectId })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
   throwIf(!task, "Task not found", 404);
   await db.delete(tasks).where(eq(tasks.id, taskId));
   logger.info({ message: "Task deleted", taskId });
+  emitToProject(task.projectId, "task:deleted", { taskId });
 };
 
 // ─── Complete / Reopen ────────────────────────────────────────────────────────
@@ -446,7 +443,9 @@ const completeTask = async (taskId, userId) => {
     action: "task_completed",
   }).catch((err) => logger.error({ message: "Failed to log task_completed", err }));
 
-  return getTaskById(taskId);
+  const fullTask = await getTaskById(taskId);
+  emitToProject(task.projectId, "task:updated", fullTask);
+  return fullTask;
 };
 
 const reopenTask = async (taskId, userId) => {
@@ -459,7 +458,9 @@ const reopenTask = async (taskId, userId) => {
     .where(eq(tasks.id, taskId));
 
   await insertHistory(taskId, userId, "reopened", "true", "false");
-  return getTaskById(taskId);
+  const fullTask = await getTaskById(taskId);
+  emitToProject(task.projectId, "task:updated", fullTask);
+  return fullTask;
 };
 
 // ─── Assignees ────────────────────────────────────────────────────────────────
@@ -520,6 +521,10 @@ const removeAssignee = async (taskId, userId, removedBy) => {
     .where(and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.userId, userId)));
 
   await insertHistory(taskId, removedBy ?? userId, "unassigned", userId, null);
+
+  const fullTask = await getTaskById(taskId);
+  emitToProject(fullTask.projectId, "task:updated", fullTask);
+  return fullTask;
 };
 
 // ─── Position / Kanban ────────────────────────────────────────────────────────
@@ -542,6 +547,18 @@ const bulkUpdatePositions = async (updates) => {
       )
     );
   });
+
+  // Derive projectId from the first task so we can broadcast the position change
+  if (updates.length > 0) {
+    const [row] = await db
+      .select({ projectId: tasks.projectId })
+      .from(tasks)
+      .where(eq(tasks.id, updates[0].taskId))
+      .limit(1);
+    if (row?.projectId) {
+      emitToProject(row.projectId, "task:positions_updated", { updates });
+    }
+  }
 };
 
 // ─── Subtasks / History ───────────────────────────────────────────────────────
@@ -788,11 +805,14 @@ const updateTaskDates = async (taskId, userId, data) => {
 
   if (historyInserts.length > 0) await Promise.all(historyInserts);
 
-  return {
+  const result = {
     id: taskId,
     startDate: updates.startDate !== undefined ? updates.startDate : existing.startDate,
     dueDate: updates.dueDate !== undefined ? updates.dueDate : existing.dueDate,
   };
+
+  emitToProject(existing.projectId, "task:updated", { ...existing, ...result });
+  return result;
 };
 
 module.exports = {
