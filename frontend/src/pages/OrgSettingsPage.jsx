@@ -292,19 +292,21 @@ const RolesTab = ({ orgId, can }) => {
                 <Badge color="gray" label="System" />
               )}
             </div>
-            {can("manage_roles") && !role.isSystem && (
+            {can("manage_roles") && (
               <div className="flex gap-2">
                 <Button variant="ghost" size="sm" onClick={() => setEditingRole(role)}>
                   Edit
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDelete(role.id)}
-                  className="text-red-500 hover:text-red-700"
-                >
-                  Delete
-                </Button>
+                {!role.isSystem && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDelete(role.id)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    Delete
+                  </Button>
+                )}
               </div>
             )}
           </div>
