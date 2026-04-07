@@ -11,7 +11,7 @@ const Layout = () => {
         <Navbar />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
-          <main className="flex-1 bg-white overflow-y-auto">
+          <main className="flex-1 bg-white overflow-hidden flex flex-col">
             <Outlet />
           </main>
         </div>
