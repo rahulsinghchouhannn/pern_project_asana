@@ -98,6 +98,14 @@ const MembersTab = ({ orgId, can }) => {
     setSavingRole(userId);
     try {
       await organizationService.updateMemberRole(orgId, userId, roleId);
+      const newRole = roles.find((r) => r.id === roleId);
+      if (newRole) {
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.userId === userId ? { ...m, role: newRole.name.toLowerCase() } : m
+          )
+        );
+      }
       showToast("Role updated", "success");
     } catch (err) {
       showToast(extractErrorMessage(err), "error");

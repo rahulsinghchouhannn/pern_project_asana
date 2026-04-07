@@ -5,6 +5,7 @@ const {
   rolePermissions,
   userRoles,
   projectRoles,
+  organizationMembers,
 } = require("../db/schema");
 const errorResponse = require("../utils/errorResponse");
 const logger = require("../config/logger");
@@ -243,6 +244,18 @@ const assignOrgRole = async (userId, orgId, roleId) => {
     }
   }
 
+  const [assignedRole] = await db
+    .select({ name: roles.name })
+    .from(roles)
+    .where(eq(roles.id, roleId))
+    .limit(1);
+
+  if (!assignedRole) {
+    const err = new Error("Role not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
   await db
     .insert(userRoles)
     .values({ userId, organizationId: orgId, roleId })
@@ -250,6 +263,16 @@ const assignOrgRole = async (userId, orgId, roleId) => {
       target: [userRoles.userId, userRoles.organizationId],
       set: { roleId },
     });
+
+  await db
+    .update(organizationMembers)
+    .set({ role: assignedRole.name.toLowerCase() })
+    .where(
+      and(
+        eq(organizationMembers.userId, userId),
+        eq(organizationMembers.organizationId, orgId)
+      )
+    );
 
   logger.info({ message: "Org role assigned", userId, orgId, roleId });
   return { success: true };
