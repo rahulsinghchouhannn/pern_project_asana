@@ -70,6 +70,8 @@ const InlineTaskRow = ({
 
   const nameInputRef = useRef(null);
   const rowRef = useRef(null);
+  const assigneeTriggerRef = useRef(null);
+  const dateTriggerRef = useRef(null);
   // Stable ref so async callbacks always read the latest task id
   const taskIdRef = useRef(null);
   // Stores the full task object returned by the backend after first save
@@ -255,8 +257,9 @@ const InlineTaskRow = ({
       </td>
 
       {/* Assignee column */}
-      <td className="py-2 px-3 w-[160px] relative border-r border-gray-200">
+      <td className="py-2 px-3 w-40 relative border-r border-gray-200">
         <button
+          ref={assigneeTriggerRef}
           onClick={() => {
             setShowAssignee((v) => !v);
             setShowDatePicker(false);
@@ -296,6 +299,7 @@ const InlineTaskRow = ({
           <AssigneeDropdown
             projectId={projectId}
             members={projectMembers}
+            anchorEl={assigneeTriggerRef.current}
             onSelect={handleAssigneeSelect}
             onClose={() => setShowAssignee(false)}
           />
@@ -303,8 +307,9 @@ const InlineTaskRow = ({
       </td>
 
       {/* Due date column */}
-      <td className="py-2 px-3 w-[110px] relative border-r border-gray-200">
+      <td className="py-2 px-3 w-27.5 relative border-r border-gray-200">
         <button
+          ref={dateTriggerRef}
           onClick={() => {
             setShowDatePicker((v) => !v);
             setShowAssignee(false);
@@ -336,6 +341,7 @@ const InlineTaskRow = ({
         {showDatePicker && (
           <DueDatePicker
             value={dueDate}
+            anchorEl={dateTriggerRef.current}
             onChange={handleDateSelect}
             onClose={() => setShowDatePicker(false)}
           />

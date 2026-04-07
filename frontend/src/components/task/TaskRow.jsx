@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import ReactDOM from "react-dom";
 import taskService from "@/services/taskService";
 import customFieldService from "@/services/customFieldService";
 import AssigneeDropdown from "./AssigneeDropdown";
@@ -52,17 +53,36 @@ const extractDisplayValue = (fieldType, valueObj) => {
 // - Date: click opens DueDatePicker, selection saves immediately
 // - Saves silently in background; reverts to last saved value on failure
 //
+const DROPDOWN_W = 160;
+const DROPDOWN_H = 200;
+
 const CustomFieldCell = ({ field, initialValue, taskId }) => {
   const [localValue, setLocalValue] = useState(() => extractDisplayValue(field.type, initialValue));
   const [editing, setEditing] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showDate, setShowDate] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState({});
   const debounceRef = useRef(null);
+  const dropdownTriggerRef = useRef(null);
+  const dateTriggerRef = useRef(null);
   // Tracks the last value known to be successfully persisted — used to revert on error
   const lastSavedRef = useRef(extractDisplayValue(field.type, initialValue));
   // Tracks whether the cell is in any active edit state — prevents an incoming
   // prop sync from overwriting text the user is currently typing
   const activeEditRef = useRef(false);
+
+  const openDropdown = (e) => {
+    e.stopPropagation();
+    activeEditRef.current = true;
+    if (dropdownTriggerRef.current) {
+      const rect = dropdownTriggerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const top = spaceBelow < DROPDOWN_H + 8 ? rect.top - DROPDOWN_H - 4 : rect.bottom + 2;
+      const left = Math.min(rect.left, window.innerWidth - DROPDOWN_W - 8);
+      setDropdownStyle({ position: "fixed", top, left, zIndex: 9999 });
+    }
+    setShowDropdown((v) => !v);
+  };
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
@@ -145,12 +165,9 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
     return (
       <div className="relative w-full">
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            activeEditRef.current = true;
-            setShowDropdown((v) => !v);
-          }}
-          className={`w-full text-left min-h-[22px] px-1 rounded transition-colors hover:bg-gray-100
+          ref={dropdownTriggerRef}
+          onClick={openDropdown}
+          className={`w-full text-left min-h-5.5 px-1 rounded transition-colors hover:bg-gray-100
             ${!localValue ? "text-gray-200" : ""}`}
         >
           {localValue ? (
@@ -168,13 +185,16 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
           )}
         </button>
 
-        {showDropdown && (
+        {showDropdown && ReactDOM.createPortal(
           <>
             <div
-              className="fixed inset-0 z-10"
+              className="fixed inset-0 z-9998"
               onClick={() => { activeEditRef.current = false; setShowDropdown(false); }}
             />
-            <div className="absolute z-20 left-0 top-full mt-0.5 w-40 bg-white border border-gray-200 rounded-xl shadow-xl py-1">
+            <div
+              className="w-40 bg-white border border-gray-200 rounded-xl shadow-xl py-1 z-9999"
+              style={dropdownStyle}
+            >
               <button
                 onClick={() => {
                   setLocalValue(null);
@@ -207,7 +227,8 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
                 </button>
               ))}
             </div>
-          </>
+          </>,
+          document.body
         )}
       </div>
     );
@@ -221,12 +242,13 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
     return (
       <div className="relative w-full">
         <button
+          ref={dateTriggerRef}
           onClick={(e) => {
             e.stopPropagation();
             activeEditRef.current = true;
             setShowDate((v) => !v);
           }}
-          className={`w-full text-left text-xs min-h-[22px] px-1 rounded transition-colors hover:bg-gray-100
+          className={`w-full text-left text-xs min-h-5.5 px-1 rounded transition-colors hover:bg-gray-100
             ${dateStr ? "text-gray-700" : "text-gray-200"}`}
         >
           {dateStr ?? "—"}
@@ -234,6 +256,7 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
         {showDate && (
           <DueDatePicker
             value={localValue}
+            anchorEl={dateTriggerRef.current}
             onChange={(date) => {
               const iso = date ? date.toISOString() : null;
               setLocalValue(iso);
@@ -270,6 +293,8 @@ const TaskRow = ({
   const [showAssignee, setShowAssignee] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const debounceRef = useRef(null);
+  const assigneeTriggerRef = useRef(null);
+  const dateTriggerRef = useRef(null);
   // Tracks whether the title input is currently focused — prevents socket updates
   // from overwriting text the user is actively typing
   const isEditingTitleRef = useRef(false);
@@ -403,6 +428,7 @@ const TaskRow = ({
       {/* ── Assignee ─────────────────────────────────────── */}
       <td className="py-0 px-3 w-40 relative border-r border-gray-200">
         <button
+          ref={assigneeTriggerRef}
           onClick={(e) => { e.stopPropagation(); setShowAssignee((v) => !v); setShowDatePicker(false); }}
           className="flex items-center gap-1.5 max-w-full"
           title={primaryAssignee ? primaryAssignee.name : "Assign member"}
@@ -436,6 +462,7 @@ const TaskRow = ({
           <AssigneeDropdown
             projectId={projectId}
             members={projectMembers}
+            anchorEl={assigneeTriggerRef.current}
             onSelect={handleAssigneeSelect}
             onClose={() => setShowAssignee(false)}
           />
@@ -445,6 +472,7 @@ const TaskRow = ({
       {/* ── Due date ─────────────────────────────────────── */}
       <td className="py-0 px-3 w-27.5 relative border-r border-gray-200">
         <button
+          ref={dateTriggerRef}
           onClick={(e) => { e.stopPropagation(); setShowDatePicker((v) => !v); setShowAssignee(false); }}
           className="flex items-center"
           title="Set due date"
@@ -462,6 +490,7 @@ const TaskRow = ({
         {showDatePicker && (
           <DueDatePicker
             value={dueDate}
+            anchorEl={dateTriggerRef.current}
             onChange={handleDateSelect}
             onClose={() => setShowDatePicker(false)}
           />

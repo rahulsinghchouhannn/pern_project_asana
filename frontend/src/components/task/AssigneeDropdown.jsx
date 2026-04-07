@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
 import projectService from "@/services/projectService";
 
 const getInitials = (name = "") =>
@@ -11,9 +12,14 @@ const getAvatarColor = (name = "") => {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 };
 
-const AssigneeDropdown = ({ projectId, members: initialMembers, onSelect, onClose }) => {
+// Dropdown width matches w-72 (288px); estimated max height ~280px
+const DROPDOWN_W = 288;
+const DROPDOWN_H = 280;
+
+const AssigneeDropdown = ({ projectId, members: initialMembers, onSelect, onClose, anchorEl }) => {
   const [members, setMembers] = useState(initialMembers ?? []);
   const [search, setSearch] = useState("");
+  const [style, setStyle] = useState({});
   const ref = useRef(null);
   const inputRef = useRef(null);
 
@@ -32,6 +38,28 @@ const AssigneeDropdown = ({ projectId, members: initialMembers, onSelect, onClos
       .catch(() => {});
   }, [projectId, initialMembers]);
 
+  // Compute fixed position from anchor element
+  useEffect(() => {
+    if (!anchorEl) return;
+
+    const updatePos = () => {
+      const rect = anchorEl.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const top =
+        spaceBelow < DROPDOWN_H + 8 ? rect.top - DROPDOWN_H - 4 : rect.bottom + 4;
+      const left = Math.min(rect.left, window.innerWidth - DROPDOWN_W - 8);
+      setStyle({ position: "fixed", top, left, zIndex: 9999 });
+    };
+
+    updatePos();
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+    };
+  }, [anchorEl]);
+
   useEffect(() => {
     const handleClick = (e) => {
       if (ref.current && !ref.current.contains(e.target)) onClose?.();
@@ -48,11 +76,15 @@ const AssigneeDropdown = ({ projectId, members: initialMembers, onSelect, onClos
       )
     : members;
 
-  return (
+  const content = (
     <div
       ref={ref}
-      className="absolute z-50 bg-white rounded-xl shadow-xl border border-gray-200 w-72 py-2"
-      style={{ top: "100%", left: 0, marginTop: 4 }}
+      className="bg-white rounded-xl shadow-xl border border-gray-200 w-72 py-2"
+      style={
+        anchorEl
+          ? style
+          : { position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 50 }
+      }
     >
       <div className="px-3 pb-2">
         <input
@@ -98,6 +130,11 @@ const AssigneeDropdown = ({ projectId, members: initialMembers, onSelect, onClos
       </div>
     </div>
   );
+
+  if (anchorEl) {
+    return ReactDOM.createPortal(content, document.body);
+  }
+  return content;
 };
 
 export default AssigneeDropdown;

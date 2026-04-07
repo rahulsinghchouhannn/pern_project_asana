@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTHS = [
@@ -24,9 +25,36 @@ const isSameDay = (a, b) => {
   );
 };
 
-const DueDatePicker = ({ value, onChange, onClose }) => {
+// Picker width matches w-72 (288px); estimated height ~300px
+const PICKER_W = 288;
+const PICKER_H = 304;
+
+const DueDatePicker = ({ value, onChange, onClose, anchorEl }) => {
   const [viewDate, setViewDate] = useState(() => (value ? new Date(value) : new Date()));
+  const [style, setStyle] = useState({});
   const ref = useRef(null);
+
+  // Compute fixed position from anchor element
+  useEffect(() => {
+    if (!anchorEl) return;
+
+    const updatePos = () => {
+      const rect = anchorEl.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const top =
+        spaceBelow < PICKER_H + 8 ? rect.top - PICKER_H - 4 : rect.bottom + 4;
+      const left = Math.min(rect.left, window.innerWidth - PICKER_W - 8);
+      setStyle({ position: "fixed", top, left, zIndex: 9999 });
+    };
+
+    updatePos();
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+    };
+  }, [anchorEl]);
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -56,11 +84,15 @@ const DueDatePicker = ({ value, onChange, onClose }) => {
   const prevMonth = () => setViewDate(new Date(year, month - 1, 1));
   const nextMonth = () => setViewDate(new Date(year, month + 1, 1));
 
-  return (
+  const content = (
     <div
       ref={ref}
-      className="absolute z-50 bg-white rounded-xl shadow-xl border border-gray-200 w-72 p-3"
-      style={{ top: "100%", left: 0, marginTop: 4 }}
+      className="bg-white rounded-xl shadow-xl border border-gray-200 w-72 p-3"
+      style={
+        anchorEl
+          ? style
+          : { position: "absolute", top: "100%", left: 0, marginTop: 4, zIndex: 50 }
+      }
     >
       {/* Start date / Due date toggle */}
       <div className="flex gap-2 mb-3">
@@ -158,6 +190,11 @@ const DueDatePicker = ({ value, onChange, onClose }) => {
       </div>
     </div>
   );
+
+  if (anchorEl) {
+    return ReactDOM.createPortal(content, document.body);
+  }
+  return content;
 };
 
 export default DueDatePicker;
