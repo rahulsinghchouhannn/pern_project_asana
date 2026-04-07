@@ -19,25 +19,6 @@ const logger = require("../config/logger");
  * and that the user is not already a project member.
  */
 const sendProjectInvitation = async (projectId, orgId, invitedBy, email) => {
-  // Guard: existing pending invitation for this project+email
-  const [pending] = await db
-    .select({ id: invitations.id })
-    .from(invitations)
-    .where(
-      and(
-        eq(invitations.projectId, projectId),
-        eq(invitations.invitedEmail, email),
-        eq(invitations.status, "pending")
-      )
-    )
-    .limit(1);
-
-  if (pending) {
-    const err = new Error("An invitation is already pending for this email");
-    err.statusCode = 400;
-    throw err;
-  }
-
   // Guard: user already a project member
   const [existingUser] = await db
     .select({ id: users.id })
@@ -80,18 +61,42 @@ const sendProjectInvitation = async (projectId, orgId, invitedBy, email) => {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-  const [invitation] = await db
-    .insert(invitations)
-    .values({
-      organizationId: orgId,
-      projectId,
-      invitedEmail: email,
-      invitedBy,
-      token,
-      status: "pending",
-      expiresAt,
-    })
-    .returning();
+  // Check for an existing pending invite — refresh it instead of rejecting
+  const [existingPending] = await db
+    .select({ id: invitations.id })
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.projectId, projectId),
+        eq(invitations.invitedEmail, email),
+        eq(invitations.status, "pending")
+      )
+    )
+    .limit(1);
+
+  let invitation;
+  if (existingPending) {
+    // Overwrite the stale pending record with a fresh token + expiry
+    [invitation] = await db
+      .update(invitations)
+      .set({ token, expiresAt, invitedBy })
+      .where(eq(invitations.id, existingPending.id))
+      .returning();
+  } else {
+    // No pending invite (first-time, expired, or previously accepted/rejected)
+    [invitation] = await db
+      .insert(invitations)
+      .values({
+        organizationId: orgId,
+        projectId,
+        invitedEmail: email,
+        invitedBy,
+        token,
+        status: "pending",
+        expiresAt,
+      })
+      .returning();
+  }
 
   // Fire-and-forget email — never fail the request if email sending fails
   emailService

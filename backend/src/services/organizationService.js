@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { eq, and, gt, desc, count } = require("drizzle-orm");
+const { eq, and, desc } = require("drizzle-orm");
 const { db } = require("../db");
 const { organizations, organizationMembers, invitations, users, roles, rolePermissions, userRoles, projectMembers } = require("../db/schema");
 const { ALL_PERMISSIONS, ADMIN_PERMISSIONS, MEMBER_PERMISSIONS } = require("../config/permissions");
@@ -296,20 +296,35 @@ const cancelInvitation = async (orgId, invitationId) => {
 const acceptInvitation = async (token, userId) => {
   const now = new Date();
 
+  // Fetch by token only — status is checked explicitly below
   const [invitation] = await db
     .select()
     .from(invitations)
-    .where(
-      and(
-        eq(invitations.token, token),
-        eq(invitations.status, "pending"),
-        gt(invitations.expiresAt, now)
-      )
-    )
+    .where(eq(invitations.token, token))
     .limit(1);
 
   if (!invitation) {
-    const err = new Error("Invalid or expired invitation");
+    const err = new Error("Invalid invitation link");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // Idempotent: user already accepted this invite — just return success
+  if (invitation.status === "accepted") {
+    return {
+      organizationId: invitation.organizationId,
+      projectId: invitation.projectId ?? null,
+    };
+  }
+
+  if (invitation.expiresAt <= now) {
+    const err = new Error("Invitation link has expired. Please request a new invite.");
+    err.statusCode = 410;
+    throw err;
+  }
+
+  if (invitation.status !== "pending") {
+    const err = new Error("Invalid invitation link");
     err.statusCode = 400;
     throw err;
   }

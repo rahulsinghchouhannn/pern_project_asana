@@ -1,6 +1,6 @@
 const { eq, and, inArray, count } = require("drizzle-orm");
 const { db } = require("../db");
-const { projects, projectMembers, projectStatuses, users } = require("../db/schema");
+const { projects, projectMembers, projectStatuses, users, organizationMembers } = require("../db/schema");
 const activityService = require("./activityService");
 const logger = require("../config/logger");
 
@@ -92,24 +92,38 @@ const getOrgProjects = async (orgId, userId) => {
 
   const projectIds = allProjects.map((p) => p.id);
 
-  // Get this user's memberships across these projects
-  const memberships = await db
-    .select({ projectId: projectMembers.projectId })
-    .from(projectMembers)
-    .where(
-      and(
-        inArray(projectMembers.projectId, projectIds),
-        eq(projectMembers.userId, userId)
+  // Fetch user's project memberships and org role in parallel
+  const [memberships, [orgMembership]] = await Promise.all([
+    db
+      .select({ projectId: projectMembers.projectId })
+      .from(projectMembers)
+      .where(
+        and(
+          inArray(projectMembers.projectId, projectIds),
+          eq(projectMembers.userId, userId)
+        )
       )
-    )
-    .limit(500);
+      .limit(500),
+    db
+      .select({ role: organizationMembers.role })
+      .from(organizationMembers)
+      .where(
+        and(
+          eq(organizationMembers.organizationId, orgId),
+          eq(organizationMembers.userId, userId)
+        )
+      )
+      .limit(1),
+  ]);
 
   const memberProjectIds = new Set(memberships.map((m) => m.projectId));
+  const isPrivileged = ["owner", "admin"].includes(orgMembership?.role);
 
-  // Private projects only visible to members
-  const visibleProjects = allProjects.filter(
-    (p) => !p.isPrivate || memberProjectIds.has(p.id)
-  );
+  // Owners/admins see all projects.
+  // Regular members only see projects they are explicitly added to.
+  const visibleProjects = isPrivileged
+    ? allProjects
+    : allProjects.filter((p) => memberProjectIds.has(p.id));
 
   if (visibleProjects.length === 0) return [];
 
