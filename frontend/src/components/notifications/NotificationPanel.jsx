@@ -45,11 +45,11 @@ const NotificationPanel = ({ onClose }) => {
   return (
     <div
       ref={panelRef}
-      className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-50 flex flex-col overflow-hidden"
+      className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 z-200 flex flex-col overflow-hidden"
       style={{ maxHeight: 480 }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
         <span className="text-sm font-semibold text-gray-800">Notifications</span>
         {unreadCount > 0 && (
           <button
@@ -83,7 +83,7 @@ const NotificationPanel = ({ onClose }) => {
       </ul>
 
       {/* Footer */}
-      <div className="border-t border-gray-100 px-4 py-2.5 flex-shrink-0">
+      <div className="border-t border-gray-100 px-4 py-2.5 shrink-0">
         <button
           onClick={handleSeeAll}
           className="w-full text-xs text-center text-indigo-600 hover:text-indigo-800 font-medium transition-colors"

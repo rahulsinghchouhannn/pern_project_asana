@@ -18,7 +18,7 @@ const Navbar = () => {
 
   return (
     <header
-      className="flex items-center gap-3 px-4 h-14 shrink-0 z-10"
+      className="flex items-center gap-3 px-4 h-14 shrink-0 relative z-30"
       style={{ backgroundColor: "#1F1F1F" }}
     >
       {/* Create button */}
