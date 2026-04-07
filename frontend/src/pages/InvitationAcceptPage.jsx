@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import organizationService from "@/services/organizationService";
-import invitationService from "@/services/invitationService";
 import { switchOrganization } from "@/store/slices/authSlice";
 import Button from "@/components/ui/Button";
 import Spinner from "@/components/ui/Spinner";
@@ -44,114 +43,60 @@ const InvitationAcceptPage = () => {
 
   const [acceptStatus, setAcceptStatus] = useState(STATUS.IDLE);
   const [errorMsg, setErrorMsg] = useState("");
-  const [result, setResult] = useState(null);      // { organizationId, projectId }
-  const [inviteInfo, setInviteInfo] = useState(null); // { valid, invitedEmail, projectId, ... }
-  const [infoLoading, setInfoLoading] = useState(true);
+  const [result, setResult] = useState(null); // { organizationId, projectId }
 
-  // ── Step 1: Fetch invitation metadata (always, no auth needed) ─────────────
+  // ── Auto-accept: only runs when the user IS logged in ─────────────────────
+  // The backend validates the token and returns the error if invalid/expired.
   useEffect(() => {
-    if (!token) return;
-    invitationService
-      .getInvitationInfo(token)
-      .then((res) => setInviteInfo(res.data.data))
-      .catch(() => setInviteInfo({ valid: false, reason: "not_found" }))
-      .finally(() => setInfoLoading(false));
-  }, [token]);
-
-  // ── Step 2: Auto-accept once we have a valid token AND the user is logged in ─
-  useEffect(() => {
-    if (!authToken || !inviteInfo?.valid) return;
+    if (!authToken || !token) return;
     if (acceptStatus !== STATUS.IDLE) return;
 
     setAcceptStatus(STATUS.LOADING);
     organizationService
       .acceptInvitation(token)
       .then((res) => {
-        const data = res.data.data; // { organizationId, projectId }
-        setResult(data);
+        setResult(res.data.data); // { organizationId, projectId }
         setAcceptStatus(STATUS.SUCCESS);
       })
       .catch((err) => {
-        setErrorMsg(err.response?.data?.error || "Failed to accept invitation");
+        setErrorMsg(err.response?.data?.error || "This invitation link is invalid or has expired.");
         setAcceptStatus(STATUS.ERROR);
       });
-  }, [authToken, inviteInfo, token, acceptStatus]);
+  }, [authToken, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Navigate after successful accept ─────────────────────────────────────
+  // ── Redirect to project / workspace after success ─────────────────────────
   const handleGoToProject = async () => {
     if (result?.organizationId) {
       await dispatch(switchOrganization(result.organizationId));
     }
-    if (result?.projectId) {
-      navigate(`/projects/${result.projectId}`);
-    } else {
-      navigate("/");
-    }
+    navigate(result?.projectId ? `/projects/${result.projectId}` : "/");
   };
 
-  // ── Loading state while fetching invite info ──────────────────────────────
-  if (infoLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Spinner size="md" />
-      </div>
-    );
-  }
-
-  // ── Invalid / expired / not found ─────────────────────────────────────────
-  if (!inviteInfo?.valid) {
-    const reasonMessages = {
-      expired: "This invitation has expired. Please ask the project owner to send a new one.",
-      already_processed: "This invitation has already been used.",
-      not_found: "This invitation link is invalid or no longer exists.",
-    };
-    const msg = reasonMessages[inviteInfo?.reason] ?? "This invitation link is invalid.";
-
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-full max-w-md text-center bg-white rounded-lg shadow-sm border border-gray-200 p-8 space-y-4">
-          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto">
-            <ErrorIcon />
-          </div>
-          <h1 className="text-xl font-bold text-gray-900">Invitation unavailable</h1>
-          <p className="text-gray-500 text-sm">{msg}</p>
-          <Button variant="secondary" size="md" onClick={() => navigate("/")} className="w-full justify-center">
-            Go home
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Not logged in — show login / register options ─────────────────────────
+  // ── NOT logged in → show login / register immediately, no API call needed ──
   if (!authToken) {
     const redirectPath = `/invitations/accept/${token}`;
-    const emailParam = inviteInfo.invitedEmail
-      ? `&email=${encodeURIComponent(inviteInfo.invitedEmail)}`
-      : "";
 
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-full max-w-md text-center bg-white rounded-lg shadow-sm border border-gray-200 p-8 space-y-4">
+        <div className="w-full max-w-md text-center bg-white rounded-lg shadow-sm border border-gray-200 p-8 space-y-6">
           <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mx-auto">
             <InviteIcon />
           </div>
-          <h1 className="text-xl font-bold text-gray-900">You&apos;ve been invited!</h1>
-          <p className="text-gray-500 text-sm">
-            Sign in or create an account to accept this invitation and start collaborating.
-          </p>
-          {inviteInfo.invitedEmail && (
-            <p className="text-xs text-gray-400">
-              This invite was sent to <strong>{inviteInfo.invitedEmail}</strong>
+
+          <div className="space-y-2">
+            <h1 className="text-xl font-bold text-gray-900">You&apos;ve been invited!</h1>
+            <p className="text-sm text-gray-500">
+              Sign in or create an account to accept this invitation and start collaborating.
             </p>
-          )}
-          <div className="space-y-2 pt-2">
-            <Link to={`/login?redirect=${encodeURIComponent(redirectPath)}`}>
+          </div>
+
+          <div className="space-y-2">
+            <Link to={`/login?redirect=${encodeURIComponent(redirectPath)}`} className="block">
               <Button variant="primary" size="md" className="w-full justify-center">
                 Log in
               </Button>
             </Link>
-            <Link to={`/register?redirect=${encodeURIComponent(redirectPath)}${emailParam}`}>
+            <Link to={`/register?redirect=${encodeURIComponent(redirectPath)}`} className="block">
               <Button variant="secondary" size="md" className="w-full justify-center">
                 Create account
               </Button>
@@ -162,10 +107,11 @@ const InvitationAcceptPage = () => {
     );
   }
 
-  // ── Logged in — show accept progress / result ─────────────────────────────
+  // ── Logged in → show accept progress / result ─────────────────────────────
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-full max-w-md text-center bg-white rounded-lg shadow-sm border border-gray-200 p-8 space-y-4">
+
         {(acceptStatus === STATUS.IDLE || acceptStatus === STATUS.LOADING) && (
           <>
             <Spinner size="md" className="mx-auto" />
@@ -200,7 +146,7 @@ const InvitationAcceptPage = () => {
             <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto">
               <ErrorIcon />
             </div>
-            <h1 className="text-xl font-bold text-gray-900">Something went wrong</h1>
+            <h1 className="text-xl font-bold text-gray-900">Invitation unavailable</h1>
             <p className="text-gray-500 text-sm">{errorMsg}</p>
             <Button
               variant="secondary"
@@ -212,6 +158,7 @@ const InvitationAcceptPage = () => {
             </Button>
           </>
         )}
+
       </div>
     </div>
   );

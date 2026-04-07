@@ -314,48 +314,19 @@ const acceptInvitation = async (token, userId) => {
     throw err;
   }
 
-  // Check not already a member
-  const [existing] = await db
-    .select({ id: organizationMembers.id })
-    .from(organizationMembers)
-    .where(
-      and(
-        eq(organizationMembers.organizationId, invitation.organizationId),
-        eq(organizationMembers.userId, userId)
-      )
-    )
-    .limit(1);
-
   await db.transaction(async (tx) => {
-    // Add to org if not already a member
-    if (!existing) {
-      await tx.insert(organizationMembers).values({
-        organizationId: invitation.organizationId,
-        userId,
-        role: "member",
-      });
-    }
+    // Upsert org member — safe even if user is already a member
+    await tx
+      .insert(organizationMembers)
+      .values({ organizationId: invitation.organizationId, userId, role: "member" })
+      .onConflictDoNothing();
 
-    // If this was a project-specific invitation, add to project members too
+    // Upsert project member — safe even if user is already in the project
     if (invitation.projectId) {
-      const [alreadyProjectMember] = await tx
-        .select({ id: projectMembers.id })
-        .from(projectMembers)
-        .where(
-          and(
-            eq(projectMembers.projectId, invitation.projectId),
-            eq(projectMembers.userId, userId)
-          )
-        )
-        .limit(1);
-
-      if (!alreadyProjectMember) {
-        await tx.insert(projectMembers).values({
-          projectId: invitation.projectId,
-          userId,
-          role: "member",
-        });
-      }
+      await tx
+        .insert(projectMembers)
+        .values({ projectId: invitation.projectId, userId, role: "member" })
+        .onConflictDoNothing();
     }
 
     await tx

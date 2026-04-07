@@ -22,7 +22,8 @@
       "Bash(node --check src/controllers/invitationController.js)",
       "Bash(node --check src/routes/invitationRoutes.js)",
       "Bash(node --check src/routes/index.js)",
-      "Bash(timeout 5 node src/server.js)"
+      "Bash(timeout 5 node src/server.js)",
+      "Bash(node --check src/services/organizationService.js)"
     ]
   }
 }
