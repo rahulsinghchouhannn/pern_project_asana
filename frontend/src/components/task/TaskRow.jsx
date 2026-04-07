@@ -316,9 +316,19 @@ const TaskRow = ({
     setAssignees([member]);
     setShowAssignee(false);
     try {
+      // Remove all existing assignees first so this is a replace, not an add.
+      // The taskAssignees table has a unique constraint on (taskId, userId), so
+      // re-adding an already-assigned member would throw and silently fail.
+      const existing = assignees.filter((a) => a.userId !== member.userId);
+      for (const a of existing) {
+        await taskService.removeAssignee(task.id, a.userId);
+      }
       const res = await taskService.addAssignee(task.id, member.userId);
       onUpdated?.(res.data.data);
-    } catch {}
+    } catch {
+      // Revert optimistic update on failure
+      setAssignees(task.assignees ?? []);
+    }
   };
 
   const handleDateSelect = async (date) => {
