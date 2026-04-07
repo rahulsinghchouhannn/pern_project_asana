@@ -176,6 +176,22 @@ const ListView = ({
       .catch(() => {});
   }, [projectId, customFieldsVersion]);
 
+  // Sync fieldValuesMap when tasks change (socket updates, new tasks, or field edits)
+  useEffect(() => {
+    if (tasks.length === 0) return;
+    setFieldValuesMap((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      tasks.forEach((task) => {
+        if (task.customFieldValues?.length > 0) {
+          next[task.id] = task.customFieldValues;
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [tasks]);
+
   const handleFieldCreated = (field) => {
     setCustomFields((prev) => [...prev, field]);
     setVisibleFieldIds((prev) => [...prev, field.id]);

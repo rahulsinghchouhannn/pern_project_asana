@@ -270,16 +270,24 @@ const TaskRow = ({
   const [showAssignee, setShowAssignee] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const debounceRef = useRef(null);
+  // Tracks whether the title input is currently focused — prevents socket updates
+  // from overwriting text the user is actively typing
+  const isEditingTitleRef = useRef(false);
 
-  // Sync assignee/date/completion from socket updates (not title — don't overwrite typing)
+  // Sync title/assignees/date/completion from socket updates (task:updated events).
+  // Title sync is skipped while the user is actively typing in the title input.
   useEffect(() => {
+    if (!isEditingTitleRef.current) {
+      setTitle(task.title ?? "");
+    }
     setAssignees(task.assignees ?? []);
     setDueDate(task.dueDate ?? null);
     setIsCompleted(task.isCompleted ?? false);
   }, [task.updatedAt, task.isCompleted]);
 
-  // Reset title only when the row is mounted for a different task
+  // Reset title (and editing flag) when the row switches to a different task
   useEffect(() => {
+    isEditingTitleRef.current = false;
     setTitle(task.title ?? "");
   }, [task.id]);
 
@@ -366,6 +374,8 @@ const TaskRow = ({
             type="text"
             value={title}
             onChange={handleTitleChange}
+            onFocus={() => { isEditingTitleRef.current = true; }}
+            onBlur={() => { isEditingTitleRef.current = false; }}
             onClick={(e) => e.stopPropagation()}
             className={`flex-1 text-sm bg-transparent outline-none min-w-0 rounded px-1 py-0.5
               focus:bg-white focus:ring-1 focus:ring-indigo-300 transition-shadow

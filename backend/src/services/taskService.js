@@ -470,6 +470,7 @@ const addAssignee = async (taskId, userId, assignedBy) => {
   throwIf(!task, "Task not found", 404);
 
   await db.insert(taskAssignees).values({ taskId, userId, assignedBy });
+  await db.update(tasks).set({ updatedAt: new Date() }).where(eq(tasks.id, taskId));
   await insertHistory(taskId, assignedBy, "assigned", null, userId);
 
   // Log activity + notify assignee (fire-and-forget)
@@ -520,6 +521,7 @@ const removeAssignee = async (taskId, userId, removedBy) => {
     .delete(taskAssignees)
     .where(and(eq(taskAssignees.taskId, taskId), eq(taskAssignees.userId, userId)));
 
+  await db.update(tasks).set({ updatedAt: new Date() }).where(eq(tasks.id, taskId));
   await insertHistory(taskId, removedBy ?? userId, "unassigned", userId, null);
 
   const fullTask = await getTaskById(taskId);

@@ -174,7 +174,10 @@ const InlineTaskRow = ({
     const tid = taskIdRef.current;
     if (tid) {
       try {
-        await taskService.addAssignee(tid, member.userId);
+        const res = await taskService.addAssignee(tid, member.userId);
+        if (taskRef.current) {
+          taskRef.current = { ...taskRef.current, assignees: res.data.data.assignees ?? [member] };
+        }
       } catch {}
     }
   };
@@ -188,6 +191,9 @@ const InlineTaskRow = ({
         await taskService.updateTask(tid, {
           dueDate: date ? date.toISOString() : null,
         });
+        if (taskRef.current) {
+          taskRef.current = { ...taskRef.current, dueDate: date ? date.toISOString() : null };
+        }
       } catch {}
     }
   };

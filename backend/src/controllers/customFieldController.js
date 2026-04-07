@@ -1,6 +1,8 @@
 const asyncHandler = require("../middleware/asyncHandler");
 const successResponse = require("../utils/successResponse");
 const customFieldService = require("../services/customFieldService");
+const taskService = require("../services/taskService");
+const { emitToProject } = require("../config/socket");
 
 // GET /api/projects/:projectId/custom-fields
 const getProjectFields = asyncHandler(async (req, res) => {
@@ -57,6 +59,10 @@ const setTaskFieldValue = asyncHandler(async (req, res) => {
   const { taskId, fieldId } = req.params;
   const value = await customFieldService.setTaskFieldValue(taskId, fieldId, req.validated);
   res.json(successResponse(value));
+  // Fire-and-forget: broadcast updated task so all clients reflect the new field value
+  taskService.getTaskById(taskId)
+    .then((fullTask) => emitToProject(fullTask.projectId, "task:updated", fullTask))
+    .catch(() => {});
 });
 
 module.exports = {
