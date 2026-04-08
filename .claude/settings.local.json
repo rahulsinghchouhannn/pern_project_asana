@@ -23,7 +23,10 @@
       "Bash(node --check src/routes/invitationRoutes.js)",
       "Bash(node --check src/routes/index.js)",
       "Bash(timeout 5 node src/server.js)",
-      "Bash(node --check src/services/organizationService.js)"
+      "Bash(node --check src/services/organizationService.js)",
+      "Bash(grep -l \"tasks.id\\\\|taskId\\\\|task_id\" d:/pern_doc_3_claude/backend/src/db/schema/*.js)",
+      "Bash(ls d:/pern_doc_3_claude/backend/src/db/migrations/*.sql)",
+      "Bash(grep -r \"activity_logs.*task_id\\\\|task_id.*activity_logs\" d:/pern_doc_3_claude/backend/src/db/migrations/*.sql)"
     ]
   }
 }
