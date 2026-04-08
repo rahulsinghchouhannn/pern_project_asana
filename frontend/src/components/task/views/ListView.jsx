@@ -712,7 +712,7 @@ const ListView = ({
                   {activeInlineArea === UNSECTIONED_DROP_ID && (
                     <InlineTaskRow {...inlineRowProps(UNSECTIONED_DROP_ID)} />
                   )}
-                  {activeInlineArea !== UNSECTIONED_DROP_ID && renderAddTaskTrigger(UNSECTIONED_DROP_ID)}
+                  {renderAddTaskTrigger(UNSECTIONED_DROP_ID)}
                 </tbody>
               )}
             </Droppable>
@@ -767,7 +767,7 @@ const ListView = ({
                           {activeInlineArea === section.id && (
                             <InlineTaskRow {...inlineRowProps(section.id)} />
                           )}
-                          {activeInlineArea !== section.id && renderAddTaskTrigger(section.id)}
+                          {renderAddTaskTrigger(section.id)}
                         </tbody>
                       )}
                     </Droppable>
