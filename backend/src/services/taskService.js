@@ -112,6 +112,7 @@ const createTask = async (projectId, orgId, creatorId, data) => {
       projectId,
       organizationId: orgId,
       statusId: data.statusId,
+      sectionId: data.sectionId ?? null,
       title: data.title,
       description: data.description ?? null,
       priority: data.priority ?? "none",
@@ -394,6 +395,10 @@ const updateTask = async (taskId, userId, data) => {
   if (data.position !== undefined && data.position !== existing.position) {
     updates.position = data.position;
   }
+  // sectionId can be explicitly set to null (move to unsectioned) or a UUID
+  if (data.sectionId !== undefined) {
+    updates.sectionId = data.sectionId ?? null;
+  }
 
   if (Object.keys(updates).length > 1) {
     await db.update(tasks).set(updates).where(eq(tasks.id, taskId));
@@ -541,12 +546,12 @@ const updateTaskPosition = async (taskId, statusId, position) => {
 const bulkUpdatePositions = async (updates) => {
   await db.transaction(async (tx) => {
     await Promise.all(
-      updates.map(({ taskId, statusId, position }) =>
-        tx
-          .update(tasks)
-          .set({ statusId, position, updatedAt: new Date() })
-          .where(eq(tasks.id, taskId))
-      )
+      updates.map(({ taskId, statusId, position, sectionId }) => {
+        const set = { statusId, position, updatedAt: new Date() };
+        // sectionId is optional — only set when explicitly provided (null = unsection)
+        if (sectionId !== undefined) set.sectionId = sectionId;
+        return tx.update(tasks).set(set).where(eq(tasks.id, taskId));
+      })
     );
   });
 
@@ -558,6 +563,7 @@ const bulkUpdatePositions = async (updates) => {
       .where(eq(tasks.id, updates[0].taskId))
       .limit(1);
     if (row?.projectId) {
+      // Broadcast the full update objects so clients can sync sectionId too
       emitToProject(row.projectId, "task:positions_updated", { updates });
     }
   }

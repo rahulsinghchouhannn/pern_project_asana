@@ -13,6 +13,7 @@ import CalendarView from "@/components/task/views/CalendarView";
 import TimelineView from "@/components/task/views/TimelineView";
 import Spinner from "@/components/ui/Spinner";
 import taskService from "@/services/taskService";
+import sectionService from "@/services/sectionService";
 import CustomFieldsManager from "@/components/customFields/CustomFieldsManager";
 import socketService from "@/services/socketService";
 
@@ -309,6 +310,9 @@ const ProjectPage = () => {
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
 
+  // ── Section state ───────────────────────────────────────────────────────────
+  const [sections, setSections] = useState([]);
+
   // ── Toolbar state (never in Redux) ─────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
@@ -348,9 +352,20 @@ const ProjectPage = () => {
     }
   }, [id, token, currentOrg?.id]);
 
+  const loadSections = useCallback(async () => {
+    if (!id || !token || !currentOrg?.id) return;
+    try {
+      const res = await sectionService.getSections(id);
+      setSections(res.data.data ?? []);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [id, token, currentOrg?.id]);
+
   useEffect(() => {
     loadTasks();
-  }, [loadTasks]);
+    loadSections();
+  }, [loadTasks, loadSections]);
 
   // Tracks task IDs created by this client so the socket echo can be ignored.
   const locallyCreatedIds = useRef(new Set());
@@ -401,15 +416,45 @@ const ProjectPage = () => {
       setTasks((prev) =>
         prev.map((t) => {
           const update = updates.find((u) => u.taskId === t.id);
-          return update ? { ...t, statusId: update.statusId, position: update.position } : t;
+          if (!update) return t;
+          const next = { ...t, statusId: update.statusId, position: update.position };
+          // Sync sectionId when it was explicitly included in the bulk update
+          if (update.sectionId !== undefined) next.sectionId = update.sectionId;
+          return next;
         })
       );
+    };
+
+    // ── Section socket handlers ────────────────────────────────────────────
+    const handleSectionCreated = (section) => {
+      setSections((prev) => {
+        if (prev.find((s) => s.id === section.id)) return prev;
+        return [...prev, section].sort((a, b) => a.position - b.position);
+      });
+    };
+
+    const handleSectionUpdated = (section) => {
+      setSections((prev) =>
+        prev.map((s) => (s.id === section.id ? { ...s, ...section } : s))
+      );
+    };
+
+    const handleSectionDeletedSocket = ({ sectionId, deletedTaskIds }) => {
+      handleSectionDeleted(sectionId, deletedTaskIds ?? []);
+    };
+
+    const handleSectionReordered = ({ sections: reordered }) => {
+      setSections(reordered);
     };
 
     socketService.on("task:created", handleSocketTaskCreated);
     socketService.on("task:updated", handleTaskUpdated);
     socketService.on("task:deleted", handleTaskDeleted);
     socketService.on("task:positions_updated", handlePositionsUpdated);
+    socketService.on("section:created", handleSectionCreated);
+    socketService.on("section:updated", handleSectionUpdated);
+    socketService.on("section:deleted", handleSectionDeletedSocket);
+    socketService.on("section:reordered", handleSectionReordered);
 
     return () => {
       socketService.emit("leave_project", id);
@@ -417,6 +462,10 @@ const ProjectPage = () => {
       socketService.off("task:updated", handleTaskUpdated);
       socketService.off("task:deleted", handleTaskDeleted);
       socketService.off("task:positions_updated", handlePositionsUpdated);
+      socketService.off("section:created", handleSectionCreated);
+      socketService.off("section:updated", handleSectionUpdated);
+      socketService.off("section:deleted", handleSectionDeletedSocket);
+      socketService.off("section:reordered", handleSectionReordered);
     };
   }, [id]);
 
@@ -463,6 +512,34 @@ const ProjectPage = () => {
     setTasks((prev) =>
       prev.map((t) => (t.id === updatedTask.id ? { ...t, ...updatedTask } : t))
     );
+  }, []);
+
+  // ── Section mutation handlers ───────────────────────────────────────────────
+  const handleSectionCreated = useCallback((section) => {
+    setSections((prev) => {
+      if (prev.find((s) => s.id === section.id)) return prev;
+      return [...prev, section].sort((a, b) => a.position - b.position);
+    });
+  }, []);
+
+  const handleSectionUpdated = useCallback((section) => {
+    setSections((prev) =>
+      prev.map((s) => (s.id === section.id ? { ...s, ...section } : s))
+    );
+  }, []);
+
+  // sectionId: the deleted section's id
+  // deletedTaskIds: array of deleted task IDs (empty = section-only delete)
+  const handleSectionDeleted = useCallback((sectionId, deletedTaskIds) => {
+    setSections((prev) => prev.filter((s) => s.id !== sectionId));
+    if (deletedTaskIds && deletedTaskIds.length > 0) {
+      setTasks((prev) => prev.filter((t) => !deletedTaskIds.includes(t.id)));
+    } else {
+      // Tasks remain but become unsectioned
+      setTasks((prev) =>
+        prev.map((t) => (t.sectionId === sectionId ? { ...t, sectionId: null } : t))
+      );
+    }
   }, []);
 
   // ── Filter + sort tasks ────────────────────────────────────────────────────
@@ -530,11 +607,15 @@ const ProjectPage = () => {
     projectId: id,
     tasks: filteredTasks,
     statuses,
+    sections,
     projectMembers: members ?? [],
     onTaskCreated: handleTaskCreated,
     onTaskUpdated: handleTaskUpdated,
     onTaskBeforeCreate: handleBeforeCreate,
     onTaskSilentSave: handleTaskSilentSave,
+    onSectionCreated: handleSectionCreated,
+    onSectionUpdated: handleSectionUpdated,
+    onSectionDeleted: handleSectionDeleted,
   };
 
   const renderTab = () => {
@@ -594,12 +675,12 @@ const ProjectPage = () => {
       )}
 
       {/* View toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 flex-shrink-0">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 shrink-0">
         {/* Search */}
         <div className="flex items-center gap-2 flex-1">
           {showSearch ? (
             <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1">
-              <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input

@@ -64,6 +64,20 @@
       "when": 1775481789997,
       "tag": "0008_loving_norrin_radd",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1744070400000,
+      "tag": "0009_sections_feature",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1775635914641,
+      "tag": "0010_sparkling_enchantress",
+      "breakpoints": true
     }
   ]
 }

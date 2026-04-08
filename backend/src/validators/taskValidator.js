@@ -14,6 +14,7 @@ const createTaskSchema = z.object({
   title: z.string().min(1, { message: "Title is required" }).max(500),
   description: z.string().max(10000).optional(),
   statusId: z.string().uuid({ message: "statusId must be a valid UUID" }),
+  sectionId: z.string().uuid().optional().nullable(),
   priority: priorityEnum,
   startDate: z.string().datetime({ offset: true }).optional().or(z.literal("")).transform((v) => v || undefined),
   dueDate: z.string().datetime({ offset: true }).optional().or(z.literal("")).transform((v) => v || undefined),
@@ -26,6 +27,7 @@ const updateTaskSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   description: z.string().max(10000).optional().nullable(),
   statusId: z.string().uuid().optional(),
+  sectionId: z.string().uuid().optional().nullable(),
   priority: priorityEnum,
   startDate: z.string().datetime({ offset: true }).optional().nullable(),
   dueDate: z.string().datetime({ offset: true }).optional().nullable(),
@@ -73,6 +75,7 @@ const bulkUpdatePositionsSchema = z.object({
         taskId: z.string().uuid(),
         statusId: z.string().uuid(),
         position: z.number().int().min(0),
+        sectionId: z.string().uuid().optional().nullable(),
       })
     )
     .min(1),

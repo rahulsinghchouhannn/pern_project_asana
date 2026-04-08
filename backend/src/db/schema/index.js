@@ -6,6 +6,7 @@ const { refreshTokens } = require("./refreshTokens");
 const { projects } = require("./projects");
 const { projectMembers } = require("./projectMembers");
 const { projectStatuses } = require("./projectStatuses");
+const { projectSections } = require("./projectSections");
 const { tasks } = require("./tasks");
 const { taskAssignees } = require("./taskAssignees");
 const { taskTags } = require("./taskTags");
@@ -32,6 +33,7 @@ module.exports = {
   projects,
   projectMembers,
   projectStatuses,
+  projectSections,
   tasks,
   taskAssignees,
   taskTags,

@@ -1,11 +1,16 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import TaskRow from "../TaskRow";
 import TaskDetailModal from "../TaskDetailModal";
 import InlineTaskRow from "../InlineTaskRow";
+import SectionRow from "../SectionRow";
+import DeleteSectionModal from "../DeleteSectionModal";
 import customFieldService from "@/services/customFieldService";
+import sectionService from "@/services/sectionService";
+import taskService from "@/services/taskService";
 import AddCustomFieldModal from "@/components/customFields/AddCustomFieldModal";
 
-// ─── Field type icons (Asana-style) ───────────────────────────────────────────
+// ─── Field type icons ─────────────────────────────────────────────────────────
 
 const FIELD_TYPE_ICONS = {
   text:     <span className="font-bold text-[10px]">T</span>,
@@ -15,31 +20,106 @@ const FIELD_TYPE_ICONS = {
   user:     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" /></svg>,
 };
 
+// The "unsectioned" droppable id — reserved, never matches a real section id
+const UNSECTIONED_DROP_ID = "unsectioned";
+
+// ─── AddSectionInlineRow — inline editable row shown when "+ Add section" is clicked
+
+const AddSectionInlineRow = ({ projectId, onCreated, onCancel, colCount }) => {
+  const [name, setName] = useState("");
+  const inputRef = useRef(null);
+  const savingRef = useRef(false);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const save = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    try {
+      const res = await sectionService.createSection(projectId, {
+        name: name.trim() || "Untitled section",
+      });
+      onCreated?.(res.data.data);
+    } catch {
+      onCancel?.();
+    } finally {
+      savingRef.current = false;
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); save(); }
+    if (e.key === "Escape") { onCancel?.(); }
+  };
+
+  return (
+    <tr className="border-t-2 border-b border-gray-200 bg-gray-50/60">
+      <td colSpan={colCount + 1} className="py-1 px-2">
+        <div className="flex items-center gap-2 h-8">
+          <svg className="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          <input
+            ref={inputRef}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={save}
+            placeholder="Section name…"
+            className="flex-1 text-sm font-semibold text-gray-700 bg-transparent outline-none placeholder-gray-400"
+          />
+        </div>
+      </td>
+    </tr>
+  );
+};
+
 // ─── Main ListView ─────────────────────────────────────────────────────────────
 
 const ListView = ({
   projectId,
   tasks = [],
   statuses = [],
+  sections: sectionsProp = [],
   projectMembers = [],
   customFieldsVersion = 0,
   onTaskCreated,
   onTaskUpdated,
   onTaskBeforeCreate,
   onTaskSilentSave,
+  onSectionCreated,
+  onSectionUpdated,
+  onSectionDeleted,
 }) => {
   const [selectedTaskId, setSelectedTaskId] = useState(null);
-  const [showInlineRow, setShowInlineRow] = useState(false);
   const [customFields, setCustomFields] = useState([]);
   const [visibleFieldIds, setVisibleFieldIds] = useState([]);
   const [fieldValuesMap, setFieldValuesMap] = useState({});
   const [showAddField, setShowAddField] = useState(false);
 
-  // Fetch custom field definitions — re-runs when a field is added/removed
+  // Local sections state — mirrors the prop; updated optimistically on reorder
+  const [sections, setSections] = useState(sectionsProp);
+  // Collapsed state: { [sectionId]: boolean } — session-only, not persisted
+  const [collapsedMap, setCollapsedMap] = useState({});
+
+  // Which area is currently showing an InlineTaskRow: UNSECTIONED_DROP_ID | sectionId | null
+  const [activeInlineArea, setActiveInlineArea] = useState(null);
+
+  // Whether the "Add section" inline input is visible
+  const [showAddSection, setShowAddSection] = useState(false);
+
+  // Delete confirmation: { section, taskCount } | null
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  // Sync sections whenever the prop changes (socket events from parent)
+  useEffect(() => { setSections(sectionsProp); }, [sectionsProp]);
+
+  // ── Custom fields ──────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (!projectId) return;
-    customFieldService
-      .getProjectFields(projectId)
+    customFieldService.getProjectFields(projectId)
       .then((res) => {
         const fields = res.data.data ?? [];
         setCustomFields(fields);
@@ -52,28 +132,20 @@ const ListView = ({
       .catch(() => {});
   }, [projectId, customFieldsVersion]);
 
-  // Fetch all custom field values for the project in one request
   useEffect(() => {
     if (!projectId) return;
-    customFieldService
-      .getProjectFieldValues(projectId)
-      .then((res) => {
-        setFieldValuesMap(res.data.data ?? {});
-      })
+    customFieldService.getProjectFieldValues(projectId)
+      .then((res) => { setFieldValuesMap(res.data.data ?? {}); })
       .catch(() => {});
   }, [projectId, customFieldsVersion]);
 
-  // Sync fieldValuesMap when tasks change (socket updates, new tasks, or field edits)
   useEffect(() => {
     if (tasks.length === 0) return;
     setFieldValuesMap((prev) => {
       const next = { ...prev };
       let changed = false;
-      tasks.forEach((task) => {
-        if (task.customFieldValues?.length > 0) {
-          next[task.id] = task.customFieldValues;
-          changed = true;
-        }
+      tasks.forEach((t) => {
+        if (t.customFieldValues?.length > 0) { next[t.id] = t.customFieldValues; changed = true; }
       });
       return changed ? next : prev;
     });
@@ -85,34 +157,200 @@ const ListView = ({
   };
 
   const visibleFields = customFields.filter((f) => visibleFieldIds.includes(f.id));
-
-  // Default status for new inline tasks (first status in project)
+  // colCount = Name + Assignee + Due date + custom fields
+  const colCount = 3 + visibleFields.length;
   const defaultStatusId = statuses[0]?.id ?? null;
+
+  // ── Task grouping ──────────────────────────────────────────────────────────
+
+  const unsectionedTasks = tasks.filter((t) => !t.sectionId);
+  const tasksBySection = sections.reduce((acc, s) => {
+    acc[s.id] = tasks.filter((t) => t.sectionId === s.id);
+    return acc;
+  }, {});
+
+  // ── Inline row ─────────────────────────────────────────────────────────────
+
+  const openInline = (area) => setActiveInlineArea(area);
+  const closeInline = () => setActiveInlineArea(null);
 
   const handleInlineCreated = (newTask) => {
     onTaskCreated?.(newTask);
-    setShowInlineRow(false);
+    closeInline();
   };
 
-  const handleInlineClose = () => setShowInlineRow(false);
-  const handleInlineBeforeCreate = () => onTaskBeforeCreate?.();
-  const handleInlineSilentSave = (taskId) => onTaskSilentSave?.(taskId);
+  // ── Section CRUD ───────────────────────────────────────────────────────────
+
+  const handleSectionCreated = (section) => {
+    onSectionCreated?.(section);
+    setShowAddSection(false);
+  };
+
+  const handleSectionUpdated = useCallback((updated) => {
+    setSections((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
+    onSectionUpdated?.(updated);
+  }, [onSectionUpdated]);
+
+  const handleToggleCollapse = (sectionId) => {
+    setCollapsedMap((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  };
+
+  // Move a section up or down by one position
+  const handleMoveSection = useCallback(async (sectionId, direction) => {
+    const idx = sections.findIndex((s) => s.id === sectionId);
+    if (idx === -1) return;
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= sections.length) return;
+
+    const reordered = [...sections];
+    [reordered[idx], reordered[targetIdx]] = [reordered[targetIdx], reordered[idx]];
+    setSections(reordered); // optimistic
+    try {
+      await sectionService.reorderSections(projectId, reordered.map((s) => s.id));
+    } catch {
+      setSections(sections); // revert on failure
+    }
+  }, [sections, projectId]);
+
+  // ── Delete section ─────────────────────────────────────────────────────────
+
+  const confirmDeleteOnly = async (section) => {
+    try {
+      await sectionService.deleteSection(projectId, section.id);
+      onSectionDeleted?.(section.id, []);
+    } catch {}
+  };
+
+  const openDeleteWithTasks = async (section) => {
+    let count = 0;
+    try {
+      const res = await sectionService.getSectionTaskCount(projectId, section.id);
+      count = res.data.data.count ?? 0;
+    } catch {}
+    setDeleteTarget({ section, taskCount: count });
+  };
+
+  const confirmDeleteWithTasks = async () => {
+    if (!deleteTarget) return;
+    try {
+      await sectionService.deleteSectionWithTasks(projectId, deleteTarget.section.id);
+      onSectionDeleted?.(deleteTarget.section.id, null);
+    } catch {}
+    setDeleteTarget(null);
+  };
+
+  // ── Detail panel ───────────────────────────────────────────────────────────
 
   const handleOpenDetail = (taskId) => {
-    setShowInlineRow(false);
+    closeInline();
     setSelectedTaskId(taskId);
   };
 
-  // Columns: Name + Assignee + Due date + custom fields + spacer + add-field
-  const colCount = 3 + visibleFieldIds.length;
-  const footerColSpan = colCount + 1;
+  // ── Prop builders ──────────────────────────────────────────────────────────
+
+  const taskRowProps = (task) => ({
+    task,
+    projectId,
+    projectMembers,
+    customFields,
+    visibleFieldIds,
+    fieldValues: fieldValuesMap[task.id] ?? [],
+    onUpdated: onTaskUpdated,
+    onOpenDetail: handleOpenDetail,
+  });
+
+  const inlineRowProps = (areaId) => ({
+    statusId: defaultStatusId,
+    sectionId: areaId === UNSECTIONED_DROP_ID ? null : areaId,
+    projectId,
+    projectMembers,
+    colCount,
+    onCreated: handleInlineCreated,
+    onBeforeCreate: onTaskBeforeCreate,
+    onSilentSave: onTaskSilentSave,
+    onClose: closeInline,
+    onOpenDetail: handleOpenDetail,
+  });
+
+  // ── Task drag-and-drop ─────────────────────────────────────────────────────
+  //
+  // Tasks are the only draggable items. All task droppables have type="TASK"
+  // (one for unsectioned, one per section). Dragging a task between droppables
+  // updates its sectionId and position via bulkUpdatePositions.
+
+  const handleDragEnd = useCallback(async (result) => {
+    const { destination, source, draggableId } = result;
+    if (!destination) return;
+    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+
+    const srcDropId = source.droppableId;
+    const dstDropId = destination.droppableId;
+    const srcSectionId = srcDropId === UNSECTIONED_DROP_ID ? null : srcDropId;
+    const dstSectionId = dstDropId === UNSECTIONED_DROP_ID ? null : dstDropId;
+
+    const srcTasks = srcDropId === UNSECTIONED_DROP_ID
+      ? [...unsectionedTasks]
+      : [...(tasksBySection[srcDropId] ?? [])];
+    const isSameArea = srcDropId === dstDropId;
+    const dstTasks = isSameArea
+      ? srcTasks
+      : (dstDropId === UNSECTIONED_DROP_ID
+        ? [...unsectionedTasks]
+        : [...(tasksBySection[dstDropId] ?? [])]);
+
+    const movedTask = srcTasks.find((t) => t.id === draggableId);
+    if (!movedTask) return;
+
+    const newSrc = srcTasks.filter((t) => t.id !== draggableId);
+    const newDst = isSameArea ? newSrc : [...dstTasks];
+    newDst.splice(destination.index, 0, { ...movedTask, sectionId: dstSectionId });
+
+    const updates = [];
+    if (!isSameArea) {
+      newSrc.forEach((t, i) =>
+        updates.push({ taskId: t.id, statusId: t.statusId, position: i, sectionId: srcSectionId })
+      );
+    }
+    newDst.forEach((t, i) =>
+      updates.push({ taskId: t.id, statusId: t.statusId, position: i, sectionId: dstSectionId })
+    );
+
+    // Optimistic sectionId update
+    onTaskUpdated?.({ ...movedTask, sectionId: dstSectionId });
+
+    try {
+      await taskService.bulkUpdatePositions(updates);
+    } catch {
+      onTaskUpdated?.({ ...movedTask, sectionId: srcSectionId }); // revert
+    }
+  }, [unsectionedTasks, tasksBySection, onTaskUpdated]);
+
+  // ── Shared "Add task…" row ─────────────────────────────────────────────────
+
+  const renderAddTaskTrigger = (areaId) => (
+    <tr>
+      <td colSpan={colCount + 1} className="py-1.5 pl-10">
+        <button
+          onClick={() => openInline(areaId)}
+          className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add task…
+        </button>
+      </td>
+    </tr>
+  );
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 shrink-0">
         <button
-          onClick={() => setShowInlineRow(true)}
+          onClick={() => openInline(UNSECTIONED_DROP_ID)}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -123,102 +361,160 @@ const ListView = ({
         <span className="text-xs text-gray-400">{tasks.length} tasks</span>
       </div>
 
-      {/* Table */}
+      {/* Scrollable table area */}
       <div className="flex-1 overflow-y-auto">
-        <table className="w-full border-collapse table-fixed">
-          <thead className="sticky top-0 bg-white z-10">
-            <tr className="border-b border-gray-200">
-              {/* Name — fixed wide column */}
-              <th className="text-left text-xs font-medium text-gray-500 py-2 pl-10 pr-2 w-125 border-r border-gray-200">
-                Name
-              </th>
-              {/* Assignee */}
-              <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-40 border-r border-gray-200">
-                Assignee
-              </th>
-              {/* Due date */}
-              <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-27.5 border-r border-gray-200">
-                Due date
-              </th>
-              {/* Visible custom field columns */}
-              {visibleFields.map((field) => (
-                <th
-                  key={field.id}
-                  className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-28 whitespace-nowrap border-r border-gray-200"
-                >
-                  <span className="flex items-center gap-1">
-                    <span className="text-gray-400">{FIELD_TYPE_ICONS[field.type]}</span>
-                    {field.name}
-                  </span>
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <table className="w-full border-collapse table-fixed">
+
+            {/* Sticky header row */}
+            <thead className="sticky top-0 bg-white z-10">
+              <tr className="border-b border-gray-200">
+                <th className="text-left text-xs font-medium text-gray-500 py-2 pl-10 pr-2 w-125 border-r border-gray-200">
+                  Name
                 </th>
-              ))}
-
-              {/* + button — add custom field */}
-              <th className="py-2 px-2 w-8 text-right">
-                <button
-                  onClick={() => setShowAddField(true)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-0.5 rounded hover:bg-gray-100"
-                  title="Add custom field"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </button>
-              </th>
-              {/* spacer */}
-              <th />
-            </tr>
-          </thead>
-
-          {/* Flat task list — no section grouping */}
-          <tbody>
-            {tasks.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                projectId={projectId}
-                projectMembers={projectMembers}
-                customFields={customFields}
-                visibleFieldIds={visibleFieldIds}
-                fieldValues={fieldValuesMap[task.id] ?? []}
-                onUpdated={onTaskUpdated}
-                onOpenDetail={handleOpenDetail}
-              />
-            ))}
-
-            {/* Inline new-task row */}
-            {showInlineRow && (
-              <InlineTaskRow
-                statusId={defaultStatusId}
-                projectId={projectId}
-                projectMembers={projectMembers}
-                colCount={colCount}
-                onCreated={handleInlineCreated}
-                onBeforeCreate={handleInlineBeforeCreate}
-                onSilentSave={handleInlineSilentSave}
-                onClose={handleInlineClose}
-                onOpenDetail={handleOpenDetail}
-              />
-            )}
-
-            {/* "Add task…" row trigger */}
-            {!showInlineRow && (
-              <tr>
-                <td colSpan={footerColSpan} className="py-2 pl-10">
-                  <button
-                    onClick={() => setShowInlineRow(true)}
-                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+                <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-40 border-r border-gray-200">
+                  Assignee
+                </th>
+                <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-27.5 border-r border-gray-200">
+                  Due date
+                </th>
+                {visibleFields.map((field) => (
+                  <th
+                    key={field.id}
+                    className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-28 whitespace-nowrap border-r border-gray-200"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <span className="flex items-center gap-1">
+                      <span className="text-gray-400">{FIELD_TYPE_ICONS[field.type]}</span>
+                      {field.name}
+                    </span>
+                  </th>
+                ))}
+                <th className="py-2 px-2 w-8 text-right">
+                  <button
+                    onClick={() => setShowAddField(true)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors p-0.5 rounded hover:bg-gray-100"
+                    title="Add custom field"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
-                    Add task…
                   </button>
-                </td>
+                </th>
+                <th />
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+
+            {/* ── Unsectioned tasks ──────────────────────────────────────────── */}
+            <Droppable droppableId={UNSECTIONED_DROP_ID} type="TASK">
+              {(provided) => (
+                <tbody ref={provided.innerRef} {...provided.droppableProps}>
+                  {unsectionedTasks.map((task, index) => (
+                    <Draggable key={task.id} draggableId={task.id} index={index}>
+                      {(dp) => (
+                        <TaskRow
+                          {...taskRowProps(task)}
+                          innerRef={dp.innerRef}
+                          draggableProps={dp.draggableProps}
+                          dragHandleProps={dp.dragHandleProps}
+                        />
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+
+                  {activeInlineArea === UNSECTIONED_DROP_ID && (
+                    <InlineTaskRow {...inlineRowProps(UNSECTIONED_DROP_ID)} />
+                  )}
+                  {activeInlineArea !== UNSECTIONED_DROP_ID && renderAddTaskTrigger(UNSECTIONED_DROP_ID)}
+                </tbody>
+              )}
+            </Droppable>
+
+            {/* ── Sections ──────────────────────────────────────────────────── */}
+            {sections.map((section, sectionIndex) => {
+              const sectionTasks = tasksBySection[section.id] ?? [];
+              const isCollapsed = !!collapsedMap[section.id];
+
+              return (
+                <React.Fragment key={section.id}>
+                  {/* Section header — plain tbody, not draggable */}
+                  <tbody>
+                    <SectionRow
+                      section={section}
+                      projectId={projectId}
+                      taskCount={sectionTasks.length}
+                      collapsed={isCollapsed}
+                      onToggle={() => handleToggleCollapse(section.id)}
+                      onUpdated={handleSectionUpdated}
+                      onDeleteOnly={() => confirmDeleteOnly(section)}
+                      onDeleteWithTasks={() => openDeleteWithTasks(section)}
+                      onAddTask={() => openInline(section.id)}
+                      onMoveUp={sectionIndex > 0 ? () => handleMoveSection(section.id, "up") : null}
+                      onMoveDown={sectionIndex < sections.length - 1 ? () => handleMoveSection(section.id, "down") : null}
+                      colCount={colCount}
+                    />
+                  </tbody>
+
+                  {/* Section tasks — Droppable for task DnD */}
+                  {!isCollapsed && (
+                    <Droppable droppableId={section.id} type="TASK">
+                      {(provided) => (
+                        <tbody ref={provided.innerRef} {...provided.droppableProps}>
+                          {sectionTasks.map((task, taskIndex) => (
+                            <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
+                              {(dp) => (
+                                <TaskRow
+                                  {...taskRowProps(task)}
+                                  innerRef={dp.innerRef}
+                                  draggableProps={dp.draggableProps}
+                                  dragHandleProps={dp.dragHandleProps}
+                                />
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+
+                          {activeInlineArea === section.id && (
+                            <InlineTaskRow {...inlineRowProps(section.id)} />
+                          )}
+                          {activeInlineArea !== section.id && renderAddTaskTrigger(section.id)}
+                        </tbody>
+                      )}
+                    </Droppable>
+                  )}
+                </React.Fragment>
+              );
+            })}
+
+            {/* ── Add section ───────────────────────────────────────────────── */}
+            <tbody>
+              {showAddSection && (
+                <AddSectionInlineRow
+                  projectId={projectId}
+                  colCount={colCount}
+                  onCreated={handleSectionCreated}
+                  onCancel={() => setShowAddSection(false)}
+                />
+              )}
+              {!showAddSection && (
+                <tr>
+                  <td colSpan={colCount + 1} className="py-3 pl-4">
+                    <button
+                      onClick={() => setShowAddSection(true)}
+                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add section
+                    </button>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+
+          </table>
+        </DragDropContext>
       </div>
 
       {/* Add custom field modal */}
@@ -227,6 +523,16 @@ const ListView = ({
           projectId={projectId}
           onCreated={handleFieldCreated}
           onClose={() => setShowAddField(false)}
+        />
+      )}
+
+      {/* Delete section + tasks confirmation */}
+      {deleteTarget && (
+        <DeleteSectionModal
+          sectionName={deleteTarget.section.name}
+          taskCount={deleteTarget.taskCount}
+          onConfirm={confirmDeleteWithTasks}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
 

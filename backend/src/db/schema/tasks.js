@@ -11,6 +11,7 @@ const { projects } = require("./projects");
 const { organizations } = require("./organizations");
 const { users } = require("./users");
 const { projectStatuses } = require("./projectStatuses");
+const { projectSections } = require("./projectSections");
 
 const tasks = pgTable("tasks", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -26,6 +27,9 @@ const tasks = pgTable("tasks", {
   statusId: uuid("status_id")
     .notNull()
     .references(() => projectStatuses.id),
+  sectionId: uuid("section_id").references(() => projectSections.id, {
+    onDelete: "set null",
+  }),
   title: varchar("title", { length: 500 }).notNull(),
   description: text("description"),
   priority: varchar("priority", { length: 50 }).default("none"),

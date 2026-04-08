@@ -41,6 +41,7 @@ const formatDueDate = (date) => {
  *
  * Props:
  *  statusId        – UUID of the status to create the task under
+ *  sectionId       – UUID of the section to create the task under (null = unsectioned)
  *  projectId       – UUID of the project
  *  projectMembers  – array of { userId, name, email, avatarUrl }
  *  colCount        – total number of columns in the table (default 3)
@@ -52,6 +53,7 @@ const formatDueDate = (date) => {
  */
 const InlineTaskRow = ({
   statusId,
+  sectionId = null,
   projectId,
   projectMembers = [],
   colCount = 3,
@@ -114,6 +116,7 @@ const InlineTaskRow = ({
           const res = await taskService.createTask(projectId, {
             title: newTitle.trim(),
             statusId,
+            ...(sectionId ? { sectionId } : {}),
           });
           const newTask = res.data.data;
           taskIdRef.current = newTask.id;
@@ -226,7 +229,7 @@ const InlineTaskRow = ({
       <td className="py-2 pl-8 pr-2 overflow-hidden border-r border-gray-200">
         <div className="flex items-center gap-2 group">
           {/* Completion circle (visual only on new row) */}
-          <div className="flex-shrink-0 w-4 h-4 rounded-full border-2 border-gray-300" />
+          <div className="shrink-0 w-4 h-4 rounded-full border-2 border-gray-300" />
 
           <input
             ref={nameInputRef}
@@ -240,14 +243,14 @@ const InlineTaskRow = ({
           />
 
           {saving && (
-            <span className="text-xs text-gray-400 flex-shrink-0 italic">saving…</span>
+            <span className="text-xs text-gray-400 shrink-0 italic">saving…</span>
           )}
 
           {/* Arrow to open full detail panel */}
           <button
             onClick={handleOpenDetail}
             title="Open task detail"
-            className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

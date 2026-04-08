@@ -285,6 +285,10 @@ const TaskRow = ({
   fieldValues = [],
   onUpdated,
   onOpenDetail,
+  // Drag-and-drop props (optional — provided by @hello-pangea/dnd Draggable)
+  innerRef,
+  draggableProps,
+  dragHandleProps,
 }) => {
   const [title, setTitle] = useState(task.title ?? "");
   const [assignees, setAssignees] = useState(task.assignees ?? []);
@@ -380,10 +384,28 @@ const TaskRow = ({
   const dateDisplay = getDueDateDisplay(dueDate);
 
   return (
-    <tr className="group border-b border-gray-100 hover:bg-gray-50/70 h-10">
+    <tr
+      ref={innerRef}
+      {...draggableProps}
+      className="group border-b border-gray-100 hover:bg-gray-50/70 h-10"
+    >
       {/* ── Name ─────────────────────────────────────────── */}
-      <td className="py-0 pl-8 pr-2 w-125 overflow-hidden border-r border-gray-200">
-        <div className="flex items-center gap-2 h-10 min-w-0 overflow-hidden">
+      <td className="py-0 pl-2 pr-2 w-125 overflow-hidden border-r border-gray-200">
+        <div className="flex items-center gap-1 h-10 min-w-0 overflow-hidden">
+          {/* Drag handle — shown on hover when DnD is active */}
+          {dragHandleProps ? (
+            <span
+              {...dragHandleProps}
+              className="shrink-0 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-opacity select-none px-0.5"
+              title="Drag to reorder"
+            >
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
+              </svg>
+            </span>
+          ) : (
+            <span className="shrink-0 w-4" />
+          )}
           {/* Completion circle */}
           <button
             onClick={handleToggleComplete}
