@@ -113,6 +113,7 @@ const createTask = async (projectId, orgId, creatorId, data) => {
       organizationId: orgId,
       statusId: data.statusId,
       sectionId: data.sectionId ?? null,
+      taskType: data.taskType ?? "task",
       title: data.title,
       description: data.description ?? null,
       priority: data.priority ?? "none",
@@ -371,6 +372,10 @@ const updateTask = async (taskId, userId, data) => {
         }
       })
       .catch((err) => logger.error({ message: "Failed to handle status_changed side effects", err }));
+  }
+  if (data.taskType !== undefined && data.taskType !== existing.taskType) {
+    updates.taskType = data.taskType;
+    historyInserts.push(insertHistory(taskId, userId, "type_changed", existing.taskType, data.taskType));
   }
   if (data.priority !== undefined && data.priority !== existing.priority) {
     updates.priority = data.priority;

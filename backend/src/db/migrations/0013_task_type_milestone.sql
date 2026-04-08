@@ -1,0 +1,1 @@
+ALTER TABLE "tasks" ADD COLUMN "task_type" varchar(50) DEFAULT 'task' NOT NULL;

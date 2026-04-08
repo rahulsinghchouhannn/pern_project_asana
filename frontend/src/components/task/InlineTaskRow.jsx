@@ -42,9 +42,11 @@ const formatDueDate = (date) => {
  * Props:
  *  statusId        – UUID of the status to create the task under
  *  sectionId       – UUID of the section to create the task under (null = unsectioned)
+ *  parentTaskId    – UUID of the parent task (when creating a subtask)
  *  projectId       – UUID of the project
  *  projectMembers  – array of { userId, name, email, avatarUrl }
  *  colCount        – total number of columns in the table (default 3)
+ *  isSubtask       – when true, applies subtask indent styling
  *  onCreated(task)    – called when the user finalizes (blur/Enter); parent adds task to list and closes row
  *  onBeforeCreate()   – called synchronously BEFORE the createTask API call; parent increments a buffer counter
  *  onSilentSave(id|null) – called after create resolves (id on success, null on error); parent flushes buffer
@@ -54,9 +56,11 @@ const formatDueDate = (date) => {
 const InlineTaskRow = ({
   statusId,
   sectionId = null,
+  parentTaskId = null,
   projectId,
   projectMembers = [],
   colCount = 3,
+  isSubtask = false,
   onCreated,
   onBeforeCreate,
   onSilentSave,
@@ -117,6 +121,7 @@ const InlineTaskRow = ({
             title: newTitle.trim(),
             statusId,
             ...(sectionId ? { sectionId } : {}),
+            ...(parentTaskId ? { parentTaskId } : {}),
           });
           const newTask = res.data.data;
           taskIdRef.current = newTask.id;
@@ -226,7 +231,7 @@ const InlineTaskRow = ({
   return (
     <tr ref={rowRef} className="border-b border-gray-100 bg-indigo-50/20">
       {/* Name column */}
-      <td className="py-2 pl-8 pr-2 overflow-hidden border-r border-gray-200">
+      <td className={`py-2 pr-2 overflow-hidden border-r border-gray-200 ${isSubtask ? "pl-16" : "pl-8"}`}>
         <div className="flex items-center gap-2 group">
           {/* Completion circle (visual only on new row) */}
           <div className="shrink-0 w-4 h-4 rounded-full border-2 border-gray-300" />

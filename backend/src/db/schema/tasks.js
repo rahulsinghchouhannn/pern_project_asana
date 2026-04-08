@@ -36,6 +36,7 @@ const tasks = pgTable("tasks", {
   startDate: timestamp("start_date"),
   dueDate: timestamp("due_date"),
   completedAt: timestamp("completed_at"),
+  taskType: varchar("task_type", { length: 50 }).notNull().default("task"),
   isCompleted: boolean("is_completed").default(false),
   position: integer("position").notNull().default(0),
   createdBy: uuid("created_by")

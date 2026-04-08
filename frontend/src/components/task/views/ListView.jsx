@@ -8,6 +8,7 @@ import DeleteSectionModal from "../DeleteSectionModal";
 import customFieldService from "@/services/customFieldService";
 import sectionService from "@/services/sectionService";
 import taskService from "@/services/taskService";
+import socketService from "@/services/socketService";
 import AddCustomFieldModal from "@/components/customFields/AddCustomFieldModal";
 
 // ─── Field type icons ─────────────────────────────────────────────────────────
@@ -23,7 +24,7 @@ const FIELD_TYPE_ICONS = {
 // The "unsectioned" droppable id — reserved, never matches a real section id
 const UNSECTIONED_DROP_ID = "unsectioned";
 
-// ─── AddSectionInlineRow — inline editable row shown when "+ Add section" is clicked
+// ─── AddSectionInlineRow ──────────────────────────────────────────────────────
 
 const AddSectionInlineRow = ({ projectId, onCreated, onCancel, colCount }) => {
   const [name, setName] = useState("");
@@ -86,6 +87,7 @@ const ListView = ({
   customFieldsVersion = 0,
   onTaskCreated,
   onTaskUpdated,
+  onTaskDeleted,
   onTaskBeforeCreate,
   onTaskSilentSave,
   onSectionCreated,
@@ -98,21 +100,36 @@ const ListView = ({
   const [fieldValuesMap, setFieldValuesMap] = useState({});
   const [showAddField, setShowAddField] = useState(false);
 
-  // Local sections state — mirrors the prop; updated optimistically on reorder
+  // Local sections state
   const [sections, setSections] = useState(sectionsProp);
-  // Collapsed state: { [sectionId]: boolean } — session-only, not persisted
   const [collapsedMap, setCollapsedMap] = useState({});
 
-  // Which area is currently showing an InlineTaskRow: UNSECTIONED_DROP_ID | sectionId | null
+  // Inline task creation
   const [activeInlineArea, setActiveInlineArea] = useState(null);
 
-  // Whether the "Add section" inline input is visible
+  // Add section inline input
   const [showAddSection, setShowAddSection] = useState(false);
 
-  // Delete confirmation: { section, taskCount } | null
+  // Delete section confirmation
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  // Sync sections whenever the prop changes (socket events from parent)
+  // ── Subtask state ──────────────────────────────────────────────────────────
+  // expandedTaskIds: Set of task IDs whose subtasks are currently shown
+  const [expandedTaskIds, setExpandedTaskIds] = useState(new Set());
+  // subtasksMap: { [parentTaskId]: subtask[] }
+  const [subtasksMap, setSubtasksMap] = useState({});
+  // addingSubtaskFor: parentTaskId | null — shows inline input below that task
+  const [addingSubtaskFor, setAddingSubtaskFor] = useState(null);
+  // Ref so socket handlers can read current expanded state without stale closure
+  const expandedTaskIdsRef = useRef(new Set());
+  // Track locally created subtask IDs to deduplicate socket echo
+  const locallyCreatedSubtaskIds = useRef(new Set());
+
+  useEffect(() => {
+    expandedTaskIdsRef.current = expandedTaskIds;
+  }, [expandedTaskIds]);
+
+  // Sync sections whenever the prop changes
   useEffect(() => { setSections(sectionsProp); }, [sectionsProp]);
 
   // ── Custom fields ──────────────────────────────────────────────────────────
@@ -157,7 +174,6 @@ const ListView = ({
   };
 
   const visibleFields = customFields.filter((f) => visibleFieldIds.includes(f.id));
-  // colCount = Name + Assignee + Due date + custom fields
   const colCount = 3 + visibleFields.length;
   const defaultStatusId = statuses[0]?.id ?? null;
 
@@ -169,9 +185,177 @@ const ListView = ({
     return acc;
   }, {});
 
+  // ── Subtask socket subscription ────────────────────────────────────────────
+  // ListView subscribes to subtask-specific socket events independently.
+  // ProjectPage filters these out of its root tasks state.
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const handleSocketTaskCreated = (task) => {
+      if (!task.parentTaskId) return; // root tasks handled by ProjectPage
+      // Suppress echo of locally created subtasks
+      if (locallyCreatedSubtaskIds.current.has(task.id)) {
+        locallyCreatedSubtaskIds.current.delete(task.id);
+        return;
+      }
+      // Add to subtasksMap only if the parent is currently expanded
+      if (!expandedTaskIdsRef.current.has(task.parentTaskId)) return;
+      setSubtasksMap((prev) => {
+        const existing = prev[task.parentTaskId] ?? [];
+        if (existing.find((t) => t.id === task.id)) return prev;
+        return { ...prev, [task.parentTaskId]: [...existing, task] };
+      });
+      // Increment parent's subtaskCount in ProjectPage state via onTaskUpdated
+      const parentTask = tasks.find((t) => t.id === task.parentTaskId);
+      if (parentTask) {
+        onTaskUpdated?.({ ...parentTask, subtaskCount: (parentTask.subtaskCount ?? 0) + 1 });
+      }
+    };
+
+    const handleSocketTaskUpdated = (task) => {
+      if (!task.parentTaskId) return; // root task updates handled by ProjectPage
+      setSubtasksMap((prev) => {
+        const existing = prev[task.parentTaskId];
+        if (!existing) return prev;
+        return {
+          ...prev,
+          [task.parentTaskId]: existing.map((t) => (t.id === task.id ? { ...t, ...task } : t)),
+        };
+      });
+    };
+
+    const handleSocketTaskDeleted = ({ taskId }) => {
+      setSubtasksMap((prev) => {
+        const next = { ...prev };
+        // If the deleted task was a parent, remove its subtask list
+        delete next[taskId];
+        // If it was a subtask, remove it from its parent's list
+        for (const parentId of Object.keys(next)) {
+          const filtered = next[parentId].filter((t) => t.id !== taskId);
+          if (filtered.length !== next[parentId].length) {
+            next[parentId] = filtered;
+          }
+        }
+        return next;
+      });
+      // Collapse if the deleted task was expanded
+      setExpandedTaskIds((prev) => {
+        if (!prev.has(taskId)) return prev;
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
+      // Clear addingSubtaskFor if it was for the deleted task
+      setAddingSubtaskFor((prev) => (prev === taskId ? null : prev));
+    };
+
+    socketService.on("task:created", handleSocketTaskCreated);
+    socketService.on("task:updated", handleSocketTaskUpdated);
+    socketService.on("task:deleted", handleSocketTaskDeleted);
+
+    return () => {
+      socketService.off("task:created", handleSocketTaskCreated);
+      socketService.off("task:updated", handleSocketTaskUpdated);
+      socketService.off("task:deleted", handleSocketTaskDeleted);
+    };
+  }, [projectId, tasks, onTaskUpdated]);
+
+  // ── Subtask handlers ───────────────────────────────────────────────────────
+
+  const handleToggleExpand = useCallback(async (taskId) => {
+    const isExpanded = expandedTaskIds.has(taskId);
+    if (isExpanded) {
+      setExpandedTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
+      setAddingSubtaskFor((prev) => (prev === taskId ? null : prev));
+      return;
+    }
+    // Expand: fetch subtasks if not already loaded
+    setExpandedTaskIds((prev) => new Set([...prev, taskId]));
+    if (!subtasksMap[taskId]) {
+      try {
+        const res = await taskService.getSubtasks(taskId);
+        setSubtasksMap((prev) => ({ ...prev, [taskId]: res.data.data ?? [] }));
+      } catch {
+        // On error collapse again
+        setExpandedTaskIds((prev) => {
+          const next = new Set(prev);
+          next.delete(taskId);
+          return next;
+        });
+      }
+    }
+  }, [expandedTaskIds, subtasksMap]);
+
+  const handleAddSubtask = useCallback((taskId) => {
+    // Ensure parent is expanded first
+    if (!expandedTaskIds.has(taskId)) {
+      setExpandedTaskIds((prev) => new Set([...prev, taskId]));
+      if (!subtasksMap[taskId]) {
+        taskService.getSubtasks(taskId)
+          .then((res) => setSubtasksMap((prev) => ({ ...prev, [taskId]: res.data.data ?? [] })))
+          .catch(() => {});
+      }
+    }
+    setAddingSubtaskFor(taskId);
+    setActiveInlineArea(null); // close any root task inline row
+  }, [expandedTaskIds, subtasksMap]);
+
+  const handleSubtaskCreated = useCallback((parentTaskId, subtask) => {
+    locallyCreatedSubtaskIds.current.add(subtask.id);
+    setSubtasksMap((prev) => ({
+      ...prev,
+      [parentTaskId]: [...(prev[parentTaskId] ?? []), subtask],
+    }));
+    setAddingSubtaskFor(null);
+    // Update parent's subtaskCount in the root tasks state
+    const parentTask = tasks.find((t) => t.id === parentTaskId);
+    if (parentTask) {
+      onTaskUpdated?.({ ...parentTask, subtaskCount: (parentTask.subtaskCount ?? 0) + 1 });
+    }
+  }, [tasks, onTaskUpdated]);
+
+  // ── Task delete ────────────────────────────────────────────────────────────
+
+  const handleDeleteTask = useCallback(async (taskId, parentTaskId) => {
+    try {
+      await taskService.deleteTask(taskId);
+      if (parentTaskId) {
+        // Deleted a subtask — remove from subtasksMap and decrement parent count
+        setSubtasksMap((prev) => {
+          const existing = prev[parentTaskId] ?? [];
+          return { ...prev, [parentTaskId]: existing.filter((t) => t.id !== taskId) };
+        });
+        const parentTask = tasks.find((t) => t.id === parentTaskId);
+        if (parentTask) {
+          onTaskUpdated?.({ ...parentTask, subtaskCount: Math.max(0, (parentTask.subtaskCount ?? 1) - 1) });
+        }
+      } else {
+        // Deleted a root task — remove its subtask state and notify parent
+        setSubtasksMap((prev) => { const next = { ...prev }; delete next[taskId]; return next; });
+        setExpandedTaskIds((prev) => { const next = new Set(prev); next.delete(taskId); return next; });
+        onTaskDeleted?.(taskId);
+      }
+    } catch (err) {
+      console.error("Failed to delete task", err);
+    }
+  }, [tasks, onTaskUpdated, onTaskDeleted]);
+
+  // ── Type conversion ────────────────────────────────────────────────────────
+  // The actual API call is handled inside TaskRow (optimistic update).
+  // onUpdated from TaskRow flows to onTaskUpdated which updates ProjectPage state.
+  // No extra handler needed here — TaskRow calls onUpdated directly.
+
   // ── Inline row ─────────────────────────────────────────────────────────────
 
-  const openInline = (area) => setActiveInlineArea(area);
+  const openInline = (area) => {
+    setActiveInlineArea(area);
+    setAddingSubtaskFor(null); // close any open subtask input
+  };
   const closeInline = () => setActiveInlineArea(null);
 
   const handleInlineCreated = (newTask) => {
@@ -195,7 +379,6 @@ const ListView = ({
     setCollapsedMap((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
   };
 
-  // Move a section up or down by one position
   const handleMoveSection = useCallback(async (sectionId, direction) => {
     const idx = sections.findIndex((s) => s.id === sectionId);
     if (idx === -1) return;
@@ -204,15 +387,13 @@ const ListView = ({
 
     const reordered = [...sections];
     [reordered[idx], reordered[targetIdx]] = [reordered[targetIdx], reordered[idx]];
-    setSections(reordered); // optimistic
+    setSections(reordered);
     try {
       await sectionService.reorderSections(projectId, reordered.map((s) => s.id));
     } catch {
-      setSections(sections); // revert on failure
+      setSections(sections);
     }
   }, [sections, projectId]);
-
-  // ── Delete section ─────────────────────────────────────────────────────────
 
   const confirmDeleteOnly = async (section) => {
     try {
@@ -257,6 +438,32 @@ const ListView = ({
     fieldValues: fieldValuesMap[task.id] ?? [],
     onUpdated: onTaskUpdated,
     onOpenDetail: handleOpenDetail,
+    expanded: expandedTaskIds.has(task.id),
+    onToggleExpand: handleToggleExpand,
+    onAddSubtask: handleAddSubtask,
+    onDeleteTask: handleDeleteTask,
+  });
+
+  const subtaskRowProps = (subtask) => ({
+    task: subtask,
+    projectId,
+    projectMembers,
+    customFields: [],
+    visibleFieldIds: [],
+    fieldValues: [],
+    onUpdated: (updated) => {
+      // Update subtask in local map
+      setSubtasksMap((prev) => {
+        const parentId = subtask.parentTaskId;
+        const existing = prev[parentId];
+        if (!existing) return prev;
+        return { ...prev, [parentId]: existing.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)) };
+      });
+      // Also propagate to parent if needed (e.g. subtask completed changes)
+    },
+    onOpenDetail: handleOpenDetail,
+    isSubtask: true,
+    onDeleteTask: handleDeleteTask,
   });
 
   const inlineRowProps = (areaId) => ({
@@ -273,10 +480,6 @@ const ListView = ({
   });
 
   // ── Task drag-and-drop ─────────────────────────────────────────────────────
-  //
-  // Tasks are the only draggable items. All task droppables have type="TASK"
-  // (one for unsectioned, one per section). Dragging a task between droppables
-  // updates its sectionId and position via bulkUpdatePositions.
 
   const handleDragEnd = useCallback(async (result) => {
     const { destination, source, draggableId } = result;
@@ -315,13 +518,12 @@ const ListView = ({
       updates.push({ taskId: t.id, statusId: t.statusId, position: i, sectionId: dstSectionId })
     );
 
-    // Optimistic sectionId update
     onTaskUpdated?.({ ...movedTask, sectionId: dstSectionId });
 
     try {
       await taskService.bulkUpdatePositions(updates);
     } catch {
-      onTaskUpdated?.({ ...movedTask, sectionId: srcSectionId }); // revert
+      onTaskUpdated?.({ ...movedTask, sectionId: srcSectionId });
     }
   }, [unsectionedTasks, tasksBySection, onTaskUpdated]);
 
@@ -342,6 +544,51 @@ const ListView = ({
       </td>
     </tr>
   );
+
+  // ── Subtask rows renderer ──────────────────────────────────────────────────
+  // Renders the expanded subtask rows + inline add input for a given parent task.
+
+  const renderSubtaskRows = (parentTask) => {
+    if (!expandedTaskIds.has(parentTask.id)) return null;
+    const subtasks = subtasksMap[parentTask.id] ?? [];
+
+    return (
+      <>
+        {subtasks.map((subtask) => (
+          <TaskRow key={subtask.id} {...subtaskRowProps(subtask)} />
+        ))}
+
+        {addingSubtaskFor === parentTask.id ? (
+          <InlineTaskRow
+            parentTaskId={parentTask.id}
+            statusId={defaultStatusId}
+            sectionId={parentTask.sectionId ?? null}
+            projectId={projectId}
+            projectMembers={projectMembers}
+            colCount={colCount}
+            isSubtask
+            onCreated={(newSubtask) => handleSubtaskCreated(parentTask.id, newSubtask)}
+            onClose={() => setAddingSubtaskFor(null)}
+            onOpenDetail={handleOpenDetail}
+          />
+        ) : (
+          <tr>
+            <td colSpan={colCount + 1} className="py-1 pl-16">
+              <button
+                onClick={() => setAddingSubtaskFor(parentTask.id)}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add subtask…
+              </button>
+            </td>
+          </tr>
+        )}
+      </>
+    );
+  };
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -409,16 +656,19 @@ const ListView = ({
               {(provided) => (
                 <tbody ref={provided.innerRef} {...provided.droppableProps}>
                   {unsectionedTasks.map((task, index) => (
-                    <Draggable key={task.id} draggableId={task.id} index={index}>
-                      {(dp) => (
-                        <TaskRow
-                          {...taskRowProps(task)}
-                          innerRef={dp.innerRef}
-                          draggableProps={dp.draggableProps}
-                          dragHandleProps={dp.dragHandleProps}
-                        />
-                      )}
-                    </Draggable>
+                    <React.Fragment key={task.id}>
+                      <Draggable draggableId={task.id} index={index}>
+                        {(dp) => (
+                          <TaskRow
+                            {...taskRowProps(task)}
+                            innerRef={dp.innerRef}
+                            draggableProps={dp.draggableProps}
+                            dragHandleProps={dp.dragHandleProps}
+                          />
+                        )}
+                      </Draggable>
+                      {renderSubtaskRows(task)}
+                    </React.Fragment>
                   ))}
                   {provided.placeholder}
 
@@ -437,7 +687,7 @@ const ListView = ({
 
               return (
                 <React.Fragment key={section.id}>
-                  {/* Section header — plain tbody, not draggable */}
+                  {/* Section header */}
                   <tbody>
                     <SectionRow
                       section={section}
@@ -455,22 +705,25 @@ const ListView = ({
                     />
                   </tbody>
 
-                  {/* Section tasks — Droppable for task DnD */}
+                  {/* Section tasks */}
                   {!isCollapsed && (
                     <Droppable droppableId={section.id} type="TASK">
                       {(provided) => (
                         <tbody ref={provided.innerRef} {...provided.droppableProps}>
                           {sectionTasks.map((task, taskIndex) => (
-                            <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
-                              {(dp) => (
-                                <TaskRow
-                                  {...taskRowProps(task)}
-                                  innerRef={dp.innerRef}
-                                  draggableProps={dp.draggableProps}
-                                  dragHandleProps={dp.dragHandleProps}
-                                />
-                              )}
-                            </Draggable>
+                            <React.Fragment key={task.id}>
+                              <Draggable draggableId={task.id} index={taskIndex}>
+                                {(dp) => (
+                                  <TaskRow
+                                    {...taskRowProps(task)}
+                                    innerRef={dp.innerRef}
+                                    draggableProps={dp.draggableProps}
+                                    dragHandleProps={dp.dragHandleProps}
+                                  />
+                                )}
+                              </Draggable>
+                              {renderSubtaskRows(task)}
+                            </React.Fragment>
                           ))}
                           {provided.placeholder}
 
