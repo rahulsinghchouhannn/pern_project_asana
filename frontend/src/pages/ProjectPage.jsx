@@ -383,6 +383,9 @@ const ProjectPage = () => {
     socketService.emit("join_project", id);
 
     const handleSocketTaskCreated = (task) => {
+      // Subtasks (parentTaskId set) are owned by ListView's socket handler.
+      // They must NEVER enter the flat root-tasks state.
+      if (task.parentTaskId) return;
       // The server emits task:created BEFORE sending the HTTP response.
       // If a local create is in flight (pendingCreateCount > 0), buffer the
       // event — we don't yet know if this is our own task or another user's.
@@ -500,6 +503,7 @@ const ProjectPage = () => {
       setTasks((prev) => {
         let next = prev;
         for (const task of buffered) {
+          if (task.parentTaskId) continue; // subtasks must not enter root list
           if (locallyCreatedIds.current.has(task.id)) continue; // our task — skip
           if (!next.find((t) => t.id === task.id)) next = [...next, task];
         }

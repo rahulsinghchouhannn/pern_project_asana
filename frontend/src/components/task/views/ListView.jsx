@@ -122,8 +122,13 @@ const ListView = ({
   const [addingSubtaskFor, setAddingSubtaskFor] = useState(null);
   // Ref so socket handlers can read current expanded state without stale closure
   const expandedTaskIdsRef = useRef(new Set());
-  // Track locally created subtask IDs to deduplicate socket echo
+  // Track locally created subtask IDs to suppress the socket echo after creation.
   const locallyCreatedSubtaskIds = useRef(new Set());
+  // Counter incremented synchronously BEFORE each subtask createTask call.
+  // While > 0 the socket handler buffers task:created events so the server-side
+  // emit (which fires before the HTTP response) doesn't add a duplicate row.
+  const pendingSubtaskCreateCount = useRef(0);
+  const subtaskSocketBuffer = useRef([]);
 
   useEffect(() => {
     expandedTaskIdsRef.current = expandedTaskIds;
@@ -194,10 +199,24 @@ const ListView = ({
 
     const handleSocketTaskCreated = (task) => {
       if (!task.parentTaskId) return; // root tasks handled by ProjectPage
-      // Suppress echo of locally created subtasks
+      // While a local subtask create is in-flight, buffer the event.
+      // The server emits task:created before it sends the HTTP response, so
+      // this event would arrive before onSilentSave registers the ID — buffering
+      // lets us suppress our own echo once the HTTP response resolves.
+      if (pendingSubtaskCreateCount.current > 0) {
+        subtaskSocketBuffer.current.push(task);
+        return;
+      }
+      // Suppress echo for locally created subtasks (remote-user path: count is 0)
       if (locallyCreatedSubtaskIds.current.has(task.id)) {
         locallyCreatedSubtaskIds.current.delete(task.id);
         return;
+      }
+      // Increment parent's subtaskCount regardless of expanded state so the badge
+      // stays accurate even when the subtask list is collapsed.
+      const parentTask = tasks.find((t) => t.id === task.parentTaskId);
+      if (parentTask) {
+        onTaskUpdated?.({ ...parentTask, subtaskCount: (parentTask.subtaskCount ?? 0) + 1 });
       }
       // Add to subtasksMap only if the parent is currently expanded
       if (!expandedTaskIdsRef.current.has(task.parentTaskId)) return;
@@ -206,11 +225,6 @@ const ListView = ({
         if (existing.find((t) => t.id === task.id)) return prev;
         return { ...prev, [task.parentTaskId]: [...existing, task] };
       });
-      // Increment parent's subtaskCount in ProjectPage state via onTaskUpdated
-      const parentTask = tasks.find((t) => t.id === task.parentTaskId);
-      if (parentTask) {
-        onTaskUpdated?.({ ...parentTask, subtaskCount: (parentTask.subtaskCount ?? 0) + 1 });
-      }
     };
 
     const handleSocketTaskUpdated = (task) => {
@@ -306,7 +320,8 @@ const ListView = ({
   }, [expandedTaskIds, subtasksMap]);
 
   const handleSubtaskCreated = useCallback((parentTaskId, subtask) => {
-    locallyCreatedSubtaskIds.current.add(subtask.id);
+    // ID is already in locallyCreatedSubtaskIds (registered by onSilentSave before
+    // the buffer flush). No need to add it again here.
     setSubtasksMap((prev) => ({
       ...prev,
       [parentTaskId]: [...(prev[parentTaskId] ?? []), subtask],
@@ -568,6 +583,28 @@ const ListView = ({
             colCount={colCount}
             isSubtask
             onCreated={(newSubtask) => handleSubtaskCreated(parentTask.id, newSubtask)}
+            onBeforeCreate={() => { pendingSubtaskCreateCount.current += 1; }}
+            onSilentSave={(taskId) => {
+              // Register the ID so the buffered socket echo is suppressed
+              if (taskId !== null) locallyCreatedSubtaskIds.current.add(taskId);
+              pendingSubtaskCreateCount.current = Math.max(0, pendingSubtaskCreateCount.current - 1);
+              // Flush buffer once all in-flight creates have resolved
+              if (pendingSubtaskCreateCount.current === 0) {
+                const buffered = subtaskSocketBuffer.current;
+                subtaskSocketBuffer.current = [];
+                setSubtasksMap((prev) => {
+                  let next = prev;
+                  for (const t of buffered) {
+                    if (locallyCreatedSubtaskIds.current.has(t.id)) continue; // our own echo
+                    if (!expandedTaskIdsRef.current.has(t.parentTaskId)) continue;
+                    const existing = next[t.parentTaskId] ?? [];
+                    if (existing.find((x) => x.id === t.id)) continue;
+                    next = { ...next, [t.parentTaskId]: [...existing, t] };
+                  }
+                  return next;
+                });
+              }
+            }}
             onClose={() => setAddingSubtaskFor(null)}
             onOpenDetail={handleOpenDetail}
           />
