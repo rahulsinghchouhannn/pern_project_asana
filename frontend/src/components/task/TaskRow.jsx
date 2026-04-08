@@ -363,7 +363,6 @@ const TaskRow = ({
   onToggleExpand,
   onAddSubtask,
   onDeleteTask,
-  onConvertType,
   // Drag-and-drop props (optional — provided by @hello-pangea/dnd Draggable)
   innerRef,
   draggableProps,
@@ -541,15 +540,18 @@ const TaskRow = ({
             {isMilestone ? (
               <button
                 onClick={handleToggleComplete}
-                className="shrink-0 flex items-center justify-center w-4 h-4 transition-opacity hover:opacity-70"
+                className="shrink-0 flex items-center justify-center w-4 h-4 transition-opacity hover:opacity-80"
                 title={isCompleted ? "Reopen" : "Complete"}
               >
                 <svg
-                  className={`w-3.5 h-3.5 ${isCompleted ? "text-indigo-500" : "text-gray-400"}`}
-                  viewBox="0 0 16 16" fill={isCompleted ? "currentColor" : "none"}
-                  stroke="currentColor" strokeWidth="1.5"
+                  viewBox="0 0 16 16"
+                  className="w-3.5 h-3.5"
+                  fill={isCompleted ? "#22c55e" : "none"}
+                  stroke="#22c55e"
+                  strokeWidth="1.6"
+                  strokeLinejoin="round"
                 >
-                  <path d="M8 1 L15 8 L8 15 L1 8 Z" />
+                  <path d="M8 1.5 L14.5 8 L8 14.5 L1.5 8 Z" />
                 </svg>
               </button>
             ) : (
