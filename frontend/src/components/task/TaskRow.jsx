@@ -41,8 +41,66 @@ const extractDisplayValue = (fieldType, valueObj) => {
     case "number":   return valueObj.valueNumber != null ? Number(valueObj.valueNumber) : null;
     case "date":     return valueObj.valueDate ?? null;
     case "dropdown": return valueObj.valueOption ?? null;
+    case "user":     return valueObj.valueUserId ?? null;
     default:         return null;
   }
+};
+
+// ─── UserFieldDropdown ────────────────────────────────────────────────────────
+
+const UserFieldDropdown = ({ style, projectMembers, selectedUserId, onSelect }) => {
+  const [search, setSearch] = useState("");
+  const filtered = projectMembers.filter((m) =>
+    m.name.toLowerCase().includes(search.toLowerCase())
+  );
+  return (
+    <div
+      className="w-52 bg-white border border-gray-200 rounded-xl shadow-xl py-1"
+      style={style}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="px-2 py-1.5 border-b border-gray-100">
+        <input
+          autoFocus
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search members…"
+          className="w-full text-xs px-2 py-1 rounded border border-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+      <button
+        onClick={() => onSelect(null)}
+        className="w-full text-left px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-50"
+      >
+        — Clear
+      </button>
+      {filtered.map((m) => (
+        <button
+          key={m.userId}
+          onClick={() => onSelect(m.userId)}
+          className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-gray-50
+            ${selectedUserId === m.userId ? "bg-indigo-50 text-indigo-700" : "text-gray-700"}`}
+        >
+          {m.avatarUrl ? (
+            <img src={m.avatarUrl} alt="" className="w-5 h-5 rounded-full shrink-0 object-cover" />
+          ) : (
+            <span
+              className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-white text-[9px] font-bold"
+              style={{ backgroundColor: getAvatarColor(m.name) }}
+            >
+              {getInitials(m.name)}
+            </span>
+          )}
+          <span className="truncate">{m.name}</span>
+        </button>
+      ))}
+      {filtered.length === 0 && (
+        <p className="px-3 py-2 text-xs text-gray-400">No members found</p>
+      )}
+    </div>
+  );
 };
 
 // ─── CustomFieldCell ──────────────────────────────────────────────────────────
@@ -50,7 +108,7 @@ const extractDisplayValue = (fieldType, valueObj) => {
 const DROPDOWN_W = 160;
 const DROPDOWN_H = 200;
 
-const CustomFieldCell = ({ field, initialValue, taskId }) => {
+const CustomFieldCell = ({ field, initialValue, taskId, projectMembers = [] }) => {
   const [localValue, setLocalValue] = useState(() => extractDisplayValue(field.type, initialValue));
   const [editing, setEditing] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -93,6 +151,7 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
         case "number":   body.valueNumber  = value;  break;
         case "date":     body.valueDate    = value;  break;
         case "dropdown": body.valueOption  = value;  break;
+        case "user":     body.valueUserId  = value;  break;
       }
       await customFieldService.setTaskFieldValue(taskId, field.id, body);
       lastSavedRef.current = value;
@@ -251,6 +310,58 @@ const CustomFieldCell = ({ field, initialValue, taskId }) => {
             }}
             onClose={() => { activeEditRef.current = false; setShowDate(false); }}
           />
+        )}
+      </div>
+    );
+  }
+
+  if (field.type === "user") {
+    const selectedMember = projectMembers.find((m) => m.userId === localValue);
+    return (
+      <div className="relative w-full">
+        <button
+          ref={dropdownTriggerRef}
+          onClick={openDropdown}
+          className="w-full text-left min-h-5.5 px-1 rounded transition-colors hover:bg-gray-100 flex items-center gap-1.5"
+        >
+          {selectedMember ? (
+            <>
+              {selectedMember.avatarUrl ? (
+                <img src={selectedMember.avatarUrl} alt="" className="w-5 h-5 rounded-full shrink-0 object-cover" />
+              ) : (
+                <span
+                  className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-white text-[9px] font-bold"
+                  style={{ backgroundColor: getAvatarColor(selectedMember.name) }}
+                >
+                  {getInitials(selectedMember.name)}
+                </span>
+              )}
+              <span className="text-xs text-gray-700 truncate">{selectedMember.name}</span>
+            </>
+          ) : (
+            <span className="text-xs text-gray-200">—</span>
+          )}
+        </button>
+
+        {showDropdown && ReactDOM.createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-9998"
+              onClick={() => { activeEditRef.current = false; setShowDropdown(false); }}
+            />
+            <UserFieldDropdown
+              style={dropdownStyle}
+              projectMembers={projectMembers}
+              selectedUserId={localValue}
+              onSelect={(userId) => {
+                setLocalValue(userId);
+                activeEditRef.current = false;
+                setShowDropdown(false);
+                doSave(userId);
+              }}
+            />
+          </>,
+          document.body
         )}
       </div>
     );
@@ -683,6 +794,7 @@ const TaskRow = ({
                 field={field}
                 initialValue={value}
                 taskId={task.id}
+                projectMembers={projectMembers}
               />
             </td>
           );
