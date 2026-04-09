@@ -18,8 +18,8 @@ const Navbar = () => {
 
   return (
     <header
-      className="flex items-center gap-3 px-4 h-14 shrink-0 relative z-30"
-      style={{ backgroundColor: "#1F1F1F" }}
+      className="flex items-center gap-3 px-4 shrink-0 relative z-30"
+      style={{ backgroundColor: "#2A2C2E", height: "52px" }}
     >
       {/* Create button */}
       <button
@@ -51,7 +51,8 @@ const Navbar = () => {
           <input
             type="text"
             placeholder="Search"
-            className="w-full pl-9 pr-4 py-1.5 rounded-md text-sm bg-[#3A3A3A] text-gray-200 placeholder-gray-400 border border-transparent focus:outline-none focus:border-gray-500 transition-colors"
+            className="w-full pl-9 pr-4 py-1.5 rounded-md text-[14px] text-[#F1F1F1] placeholder-white/60 border-0 focus:outline-none transition-colors"
+            style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
           />
         </div>
       </div>
@@ -62,7 +63,7 @@ const Navbar = () => {
         <div className="relative">
           <button
             onClick={() => setNotifOpen((prev) => !prev)}
-            className="relative p-1.5 rounded hover:bg-[#3A3A3A] text-gray-400 hover:text-gray-200 transition-colors"
+            className="relative p-1.5 rounded hover:bg-[rgba(255,255,255,0.1)] text-gray-400 hover:text-gray-200 transition-colors"
             aria-label="Notifications"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -78,7 +79,7 @@ const Navbar = () => {
         </div>
 
         {/* Help */}
-        <button className="p-1.5 rounded hover:bg-[#3A3A3A] text-gray-400 hover:text-gray-200 transition-colors" aria-label="Help">
+        <button className="p-1.5 rounded hover:bg-[rgba(255,255,255,0.1)] text-gray-400 hover:text-gray-200 transition-colors" aria-label="Help">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>

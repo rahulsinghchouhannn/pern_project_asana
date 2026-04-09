@@ -8,12 +8,13 @@ const NavItem = ({ to, icon, label }) => (
   <NavLink
     to={to}
     className={({ isActive }) =>
-      `flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
+      `flex items-center gap-2.5 px-3 rounded transition-colors text-[14px] ${
         isActive
-          ? "bg-[#3A3A3A] text-white"
-          : "text-gray-400 hover:bg-[#2D2D2D] hover:text-gray-200"
+          ? "bg-[rgba(255,255,255,0.1)] text-[#F1F1F1]"
+          : "text-[#F1F1F1] hover:bg-[rgba(255,255,255,0.08)]"
       }`
     }
+    style={{ paddingTop: "6px", paddingBottom: "6px", borderRadius: "4px" }}
   >
     {icon}
     <span>{label}</span>
@@ -21,7 +22,10 @@ const NavItem = ({ to, icon, label }) => (
 );
 
 const SectionLabel = ({ children }) => (
-  <p className="px-3 pt-4 pb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+  <p
+    className="px-3 pb-1 font-semibold uppercase tracking-wider"
+    style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", marginTop: "8px" }}
+  >
     {children}
   </p>
 );
@@ -96,11 +100,11 @@ const Sidebar = () => {
 
   return (
     <aside
-        className="w-[196px] shrink-0 flex flex-col h-full overflow-hidden"
-        style={{ backgroundColor: "#1F1F1F" }}
+        className="w-[260px] shrink-0 flex flex-col h-full overflow-hidden"
+        style={{ backgroundColor: "#2A2C2E" }}
       >
         {/* Workspace header */}
-        <div className="flex items-center gap-2 px-3 py-3 border-b border-[#3A3A3A] shrink-0">
+        <div className="flex items-center gap-2 px-3 py-3 border-b shrink-0" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
           <div className="w-6 h-6 rounded bg-pink-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
             {currentOrg?.name?.[0]?.toUpperCase() ?? "W"}
           </div>
@@ -124,14 +128,14 @@ const Sidebar = () => {
 
           {/* Projects section — scrollable */}
           <div className="flex flex-col flex-1 overflow-hidden min-h-0">
-            <div className="flex items-center justify-between px-3 pt-4 pb-1 shrink-0">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <div className="flex items-center justify-between px-3 pb-1 shrink-0" style={{ marginTop: "8px" }}>
+              <span className="font-semibold uppercase tracking-wider" style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>
                 Projects
               </span>
               {can("create_project") && (
                 <button
                   onClick={() => navigate("/projects/new")}
-                  className="text-gray-500 hover:text-gray-300 transition-colors"
+                  className="text-white/50 hover:text-[#F1F1F1] transition-colors"
                   aria-label="New project"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -150,12 +154,13 @@ const Sidebar = () => {
                     key={p.id}
                     to={`/projects/${p.id}`}
                     className={({ isActive }) =>
-                      `flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                      `flex items-center gap-2.5 px-3 transition-colors text-[14px] text-[#F1F1F1] ${
                         isActive
-                          ? "bg-[#3A3A3A] text-white"
-                          : "text-gray-400 hover:bg-[#2D2D2D] hover:text-gray-200"
+                          ? "bg-[rgba(255,255,255,0.1)]"
+                          : "hover:bg-[rgba(255,255,255,0.08)]"
                       }`
                     }
+                    style={{ paddingTop: "6px", paddingBottom: "6px", borderRadius: "4px" }}
                   >
                     <ProjectDot color={p.color} />
                     <span className="truncate">{p.name}</span>

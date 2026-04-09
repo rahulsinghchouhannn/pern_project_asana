@@ -7,7 +7,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 const Layout = () => {
   return (
     <ToastProvider>
-      <div className="relative flex flex-col h-screen overflow-hidden" style={{ backgroundColor: "#1F1F1F" }}>
+      <div className="relative flex flex-col h-screen overflow-hidden" style={{ backgroundColor: "#2A2C2E" }}>
         <Navbar />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
