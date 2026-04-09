@@ -109,6 +109,7 @@ const ListView = ({
 
   // Add section inline input
   const [showAddSection, setShowAddSection] = useState(false);
+  const [sectionInputKey, setSectionInputKey] = useState(0);
 
   // Delete section confirmation
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -780,27 +781,29 @@ const ListView = ({
             <tbody>
               {showAddSection && (
                 <AddSectionInlineRow
+                  key={sectionInputKey}
                   projectId={projectId}
                   colCount={colCount}
                   onCreated={handleSectionCreated}
                   onCancel={() => setShowAddSection(false)}
                 />
               )}
-              {!showAddSection && (
-                <tr>
-                  <td colSpan={colCount + 1} className="py-3 pl-4">
-                    <button
-                      onClick={() => setShowAddSection(true)}
-                      className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      Add section
-                    </button>
-                  </td>
-                </tr>
-              )}
+              <tr>
+                <td colSpan={colCount + 1} className="py-3 pl-4">
+                  <button
+                    onClick={() => {
+                      setSectionInputKey((k) => k + 1);
+                      setShowAddSection(true);
+                    }}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add section
+                  </button>
+                </td>
+              </tr>
             </tbody>
 
           </table>
