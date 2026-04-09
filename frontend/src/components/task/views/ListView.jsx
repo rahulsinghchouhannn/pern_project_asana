@@ -108,6 +108,14 @@ const ListView = ({
   const [draggingSectionId, setDraggingSectionId] = useState(null);
   // sectionDropIndex: insertion point in the sections array (0 = before first, N = after Nth)
   const [sectionDropIndex, setSectionDropIndex] = useState(null);
+  // Refs give synchronous access in drag event handlers without stale closures.
+  // The first dragover fires before React can re-render with new state, so
+  // reading state there always returns the pre-drag value (null) — the refs
+  // are updated synchronously in the same call stack as the native event.
+  const draggingSectionIdRef = useRef(null);
+  const sectionDropIndexRef = useRef(null);
+  // Always holds the latest sections array so the drop handler never reads stale state.
+  const sectionsRef = useRef(sectionsProp);
 
   // Inline task creation
   const [activeInlineArea, setActiveInlineArea] = useState(null);
@@ -143,6 +151,9 @@ const ListView = ({
 
   // Sync sections whenever the prop changes
   useEffect(() => { setSections(sectionsProp); }, [sectionsProp]);
+
+  // Keep sectionsRef in sync so drag handlers never read stale sections
+  useEffect(() => { sectionsRef.current = sections; }, [sections]);
 
   // Real-time section reorder from other members
   useEffect(() => {
@@ -512,64 +523,105 @@ const ListView = ({
   });
 
   // ── Section drag-and-drop (native HTML5 DnD) ──────────────────────────────
+  //
+  // Why refs instead of state in the handlers:
+  // The browser fires the first "dragover" event synchronously, before React
+  // has flushed the setState from "dragstart". Reading state inside dragover
+  // always returns null on the first event, so e.preventDefault() is never
+  // called, the browser sees the drag as invalid and cancels it immediately.
+  // Refs are written synchronously and readable immediately in any event handler.
 
-  const handleSectionDragStart = useCallback((sectionId) => {
+  const setDragState = useCallback((id, idx) => {
+    draggingSectionIdRef.current = id;
+    sectionDropIndexRef.current = idx;
+    setDraggingSectionId(id);
+    setSectionDropIndex(idx);
+  }, []);
+
+  // Called from SectionRow's drag handle onDragStart.
+  // nativeEvent is the raw DragEvent so we can attach a custom drag image.
+  const handleSectionDragStart = useCallback((sectionId, nativeEvent, rowEl) => {
+    // Write ref synchronously — readable by the very next dragover event
+    draggingSectionIdRef.current = sectionId;
+    sectionDropIndexRef.current = null;
     setDraggingSectionId(sectionId);
+    setSectionDropIndex(null);
+
+    // Custom drag image: clone the whole section row element so it looks like
+    // a solid lifted card matching the screenshot, instead of the browser ghost.
+    if (rowEl && nativeEvent.dataTransfer) {
+      const clone = rowEl.cloneNode(true);
+      // Style the clone as a lifted card
+      Object.assign(clone.style, {
+        position: "fixed",
+        top: "-9999px",
+        left: "-9999px",
+        width: `${rowEl.offsetWidth}px`,
+        background: "#ffffff",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+        borderRadius: "6px",
+        border: "1px solid #e5e7eb",
+        opacity: "1",
+        pointerEvents: "none",
+        zIndex: "9999",
+      });
+      document.body.appendChild(clone);
+      nativeEvent.dataTransfer.setDragImage(clone, 20, 16);
+      // Remove after next tick — browser has captured the image by then
+      requestAnimationFrame(() => document.body.removeChild(clone));
+    }
   }, []);
 
   const handleSectionDragEnd = useCallback(() => {
-    setDraggingSectionId(null);
-    setSectionDropIndex(null);
-  }, []);
+    setDragState(null, null);
+  }, [setDragState]);
 
-  // Attached to both the header <tbody> and tasks <tbody> of every section.
-  // Guard: only active while a section drag is in progress — task drags leave
-  // draggingSectionId null so this handler returns immediately without touching
-  // the event, letting @hello-pangea/dnd process task drags unimpeded.
-  const handleSectionDragOver = useCallback((e, sectionIndex) => {
-    if (!draggingSectionId) return;
+  // makeSectionDragOver(sectionIndex) returns a handler for a specific section.
+  // Guard: only active while a section drag is in progress (ref is non-null) —
+  // task drags leave draggingSectionIdRef null so this returns immediately,
+  // letting @hello-pangea/dnd handle task drags without interference.
+  const makeSectionDragOver = useCallback((sectionIndex) => (e) => {
+    if (!draggingSectionIdRef.current) return;
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
     const rect = e.currentTarget.getBoundingClientRect();
     const insertBefore = e.clientY < rect.top + rect.height / 2;
-    setSectionDropIndex(insertBefore ? sectionIndex : sectionIndex + 1);
-  }, [draggingSectionId]);
+    const next = insertBefore ? sectionIndex : sectionIndex + 1;
+    if (sectionDropIndexRef.current !== next) {
+      sectionDropIndexRef.current = next;
+      setSectionDropIndex(next);
+    }
+  }, []);
 
+  // Single drop handler shared by all zones — reads from refs for consistency.
   const handleSectionDrop = useCallback(async (e) => {
     e.preventDefault();
-    if (!draggingSectionId || sectionDropIndex === null) {
-      setDraggingSectionId(null);
-      setSectionDropIndex(null);
-      return;
-    }
-    const srcIdx = sections.findIndex((s) => s.id === draggingSectionId);
-    if (
-      srcIdx === -1 ||
-      sectionDropIndex === srcIdx ||
-      sectionDropIndex === srcIdx + 1
-    ) {
-      // No real movement — cancel cleanly
-      setDraggingSectionId(null);
-      setSectionDropIndex(null);
-      return;
-    }
+    const dragId = draggingSectionIdRef.current;
+    const dropIdx = sectionDropIndexRef.current;
 
-    // Build new ordered array
-    const reordered = sections.filter((s) => s.id !== draggingSectionId);
-    const insertAt = sectionDropIndex > srcIdx ? sectionDropIndex - 1 : sectionDropIndex;
-    reordered.splice(insertAt, 0, sections[srcIdx]);
+    // Reset state immediately so UI snaps back cleanly on any exit path
+    setDragState(null, null);
 
-    const prevSections = [...sections];
-    setSections(reordered);           // optimistic update
-    setDraggingSectionId(null);
-    setSectionDropIndex(null);
+    if (!dragId || dropIdx === null) return;
+
+    const current = sectionsRef.current;
+    const srcIdx = current.findIndex((s) => s.id === dragId);
+    if (srcIdx === -1 || dropIdx === srcIdx || dropIdx === srcIdx + 1) return;
+
+    const reordered = current.filter((s) => s.id !== dragId);
+    const insertAt = dropIdx > srcIdx ? dropIdx - 1 : dropIdx;
+    reordered.splice(insertAt, 0, current[srcIdx]);
+
+    const prevSections = [...current];
+    setSections(reordered);  // optimistic update
 
     try {
       await sectionService.reorderSections(projectId, reordered.map((s) => s.id));
     } catch {
-      setSections(prevSections);      // revert on API error
+      setSections(prevSections);  // revert on API error
     }
-  }, [draggingSectionId, sectionDropIndex, sections, projectId]);
+  }, [projectId, setDragState]);
 
   // ── Task drag-and-drop ─────────────────────────────────────────────────────
 
@@ -726,7 +778,15 @@ const ListView = ({
       </div>
 
       {/* Scrollable table area */}
-      <div className="flex-1 overflow-y-auto">
+      {/* onDragOver/onDrop here are the fallback for the whole container —
+          they prevent the browser from cancelling a section drag when the
+          cursor moves over areas that have no specific section drop handler
+          (thead, unsectioned tbody, gaps between rows). */}
+      <div
+        className="flex-1 overflow-y-auto"
+        onDragOver={(e) => { if (draggingSectionIdRef.current) e.preventDefault(); }}
+        onDrop={handleSectionDrop}
+      >
         <DragDropContext onDragEnd={handleDragEnd}>
           <table className="w-full border-collapse table-fixed">
 
@@ -816,7 +876,7 @@ const ListView = ({
                   {/* Section header */}
                   <tbody
                     style={{ opacity: isDragging ? 0.4 : 1 }}
-                    onDragOver={(e) => handleSectionDragOver(e, sectionIndex)}
+                    onDragOver={makeSectionDragOver(sectionIndex)}
                     onDrop={handleSectionDrop}
                   >
                     <SectionRow
@@ -845,7 +905,7 @@ const ListView = ({
                           ref={provided.innerRef}
                           {...provided.droppableProps}
                           style={{ opacity: isDragging ? 0.4 : 1 }}
-                          onDragOver={(e) => handleSectionDragOver(e, sectionIndex)}
+                          onDragOver={makeSectionDragOver(sectionIndex)}
                           onDrop={handleSectionDrop}
                         >
                           {sectionTasks.map((task, taskIndex) => (
@@ -886,7 +946,7 @@ const ListView = ({
 
             {/* ── Add section ───────────────────────────────────────────────── */}
             <tbody
-              onDragOver={(e) => handleSectionDragOver(e, sections.length)}
+              onDragOver={makeSectionDragOver(sections.length)}
               onDrop={handleSectionDrop}
             >
               {showAddSection && (

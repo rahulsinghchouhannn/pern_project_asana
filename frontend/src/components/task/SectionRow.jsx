@@ -40,6 +40,7 @@ const SectionRow = ({
   const debounceRef = useRef(null);
   const inputRef = useRef(null);
   const menuRef = useRef(null);
+  const rowRef = useRef(null);
   // Track the saved name so Escape can revert
   const savedNameRef = useRef(section.name);
 
@@ -111,7 +112,7 @@ const SectionRow = ({
   };
 
   return (
-    <tr className="group/section border-t-2 border-b border-gray-200 bg-gray-50/60">
+    <tr ref={rowRef} className="group/section border-t-2 border-b border-gray-200 bg-gray-50/60">
       <td colSpan={colCount + 1} className="py-0 pr-2">
         <div className="flex items-center h-9 gap-1">
           {/* Section drag handle — native HTML5 drag */}
@@ -120,7 +121,7 @@ const SectionRow = ({
             onDragStart={(e) => {
               e.dataTransfer.effectAllowed = "move";
               e.dataTransfer.setData("text/plain", section.id);
-              onSectionDragStart?.(section.id);
+              onSectionDragStart?.(section.id, e, rowRef.current);
             }}
             onDragEnd={onSectionDragEnd}
             className="shrink-0 opacity-0 group-hover/section:opacity-100 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-opacity select-none px-1"
