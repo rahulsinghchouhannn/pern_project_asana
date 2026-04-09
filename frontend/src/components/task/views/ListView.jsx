@@ -99,6 +99,7 @@ const ListView = ({
   const [visibleFieldIds, setVisibleFieldIds] = useState([]);
   const [fieldValuesMap, setFieldValuesMap] = useState({});
   const [showAddField, setShowAddField] = useState(false);
+  const addFieldBtnRef = useRef(null);
 
   // Local sections state
   const [sections, setSections] = useState(sectionsProp);
@@ -815,7 +816,8 @@ const ListView = ({
                 ))}
                 <th className="py-2 px-2 w-8 text-right">
                   <button
-                    onClick={() => setShowAddField(true)}
+                    ref={addFieldBtnRef}
+                    onClick={() => setShowAddField((v) => !v)}
                     className="text-gray-400 hover:text-gray-600 transition-colors p-0.5 rounded hover:bg-gray-100"
                     title="Add custom field"
                   >
@@ -980,12 +982,13 @@ const ListView = ({
         </DragDropContext>
       </div>
 
-      {/* Add custom field modal */}
+      {/* Add custom field panel */}
       {showAddField && (
         <AddCustomFieldModal
           projectId={projectId}
           onCreated={handleFieldCreated}
           onClose={() => setShowAddField(false)}
+          anchorRef={addFieldBtnRef}
         />
       )}
 
