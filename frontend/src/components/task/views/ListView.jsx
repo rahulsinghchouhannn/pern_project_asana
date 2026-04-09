@@ -1063,6 +1063,7 @@ const ListView = ({
           onCreated={handleFieldCreated}
           onClose={() => setShowAddField(false)}
           anchorRef={addFieldBtnRef}
+          fieldCount={customFields.length}
         />
       )}
 

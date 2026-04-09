@@ -52,7 +52,7 @@ const FIELD_TYPES = [
 
 const DEFAULT_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#8b5cf6", "#ec4899"];
 
-const AddCustomFieldModal = ({ projectId, onCreated, onClose, anchorRef }) => {
+const AddCustomFieldModal = ({ projectId, onCreated, onClose, anchorRef, fieldCount = 0 }) => {
   const panelRef = useRef(null);
   const nameInputRef = useRef(null);
 
@@ -117,21 +117,22 @@ const AddCustomFieldModal = ({ projectId, onCreated, onClose, anchorRef }) => {
     setError("");
 
     if (isTimer) {
-      // Create both Estimated Time and Actual Time fields
+      // Create both fields sequentially with explicit positions so Estimated Time
+      // always has a lower position than Actual Time — guaranteeing stable column order.
       setSaving(true);
       try {
-        const [estRes, actRes] = await Promise.all([
-          customFieldService.createField(projectId, {
-            name: "Estimated Time",
-            type: "estimated_time",
-            isRequired: false,
-          }),
-          customFieldService.createField(projectId, {
-            name: "Actual Time",
-            type: "actual_time",
-            isRequired: false,
-          }),
-        ]);
+        const estRes = await customFieldService.createField(projectId, {
+          name: "Estimated Time",
+          type: "estimated_time",
+          isRequired: false,
+          position: fieldCount,
+        });
+        const actRes = await customFieldService.createField(projectId, {
+          name: "Actual Time",
+          type: "actual_time",
+          isRequired: false,
+          position: fieldCount + 1,
+        });
         onCreated(estRes.data.data);
         onCreated(actRes.data.data);
         onClose();

@@ -111,6 +111,16 @@ const UserFieldDropdown = ({ style, projectMembers, selectedUserId, onSelect }) 
 
 // ─── EstimatedTimeCell ────────────────────────────────────────────────────────
 
+// Convert stored minutes into an editable string that round-trips through parseTimeInput.
+// e.g. 44 → "44",  90 → "1:30",  671 → "11:11"
+const toEditableFormat = (minutes) => {
+  if (minutes == null || minutes <= 0) return "";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return String(m);
+  return `${h}:${String(m).padStart(2, "0")}`;
+};
+
 const EstimatedTimeCell = ({ field, initialValue, taskId }) => {
   const [localMinutes, setLocalMinutes] = useState(
     () => initialValue?.valueNumber != null ? Number(initialValue.valueNumber) : null
@@ -120,6 +130,8 @@ const EstimatedTimeCell = ({ field, initialValue, taskId }) => {
   const [suggestion, setSuggestion] = useState(null);
   const lastSavedRef = useRef(localMinutes);
   const activeEditRef = useRef(false);
+  // Only save to DB when the user has actually typed something in this edit session
+  const isDirtyRef = useRef(false);
 
   useEffect(() => {
     if (activeEditRef.current) return;
@@ -142,6 +154,7 @@ const EstimatedTimeCell = ({ field, initialValue, taskId }) => {
 
   const handleInputChange = (e) => {
     const raw = e.target.value;
+    isDirtyRef.current = true;
     setInputVal(raw);
     const parsed = parseTimeInput(raw);
     setSuggestion(parsed != null ? describeMinutes(parsed) : null);
@@ -150,16 +163,21 @@ const EstimatedTimeCell = ({ field, initialValue, taskId }) => {
   const commitEdit = () => {
     activeEditRef.current = false;
     setEditing(false);
+    setSuggestion(null);
+    // Only update if the user actually typed something in this session
+    if (!isDirtyRef.current) return;
+    isDirtyRef.current = false;
     const parsed = parseTimeInput(inputVal);
     const minutes = parsed != null && parsed > 0 ? parsed : null;
     setLocalMinutes(minutes);
-    setSuggestion(null);
     doSave(minutes);
   };
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
     if (e.key === "Escape") {
+      // Cancel edit — discard changes, do not save
+      isDirtyRef.current = false;
       activeEditRef.current = false;
       setEditing(false);
       setSuggestion(null);
@@ -195,8 +213,11 @@ const EstimatedTimeCell = ({ field, initialValue, taskId }) => {
       onClick={(e) => {
         e.stopPropagation();
         activeEditRef.current = true;
-        setInputVal(displayed ?? "");
-        setSuggestion(null);
+        isDirtyRef.current = false;
+        // Initialize input in a format that round-trips through parseTimeInput
+        // so the existing value is shown correctly and won't be overwritten on blur
+        setInputVal(toEditableFormat(localMinutes));
+        setSuggestion(localMinutes ? describeMinutes(localMinutes) : null);
         setEditing(true);
       }}
       className={`w-full text-left text-xs px-1 py-0.5 rounded min-h-5.5 block transition-colors hover:bg-gray-100
@@ -270,8 +291,11 @@ const ActualTimeCell = ({ field, initialValue, taskId }) => {
 
   const isRunning = timerData?.taskId === taskId && timerData?.customFieldId === field.id;
   const elapsedMinutes = isRunning ? getElapsedMinutes(timerData.startedAt) : 0;
-  const displayTotal = savedTotal + elapsedMinutes;
-  const cellDisplay = formatMinutes(displayTotal);
+  // When running: show only the current session elapsed time (starts from 0).
+  // When stopped: show the saved total of all entries.
+  const cellDisplay = isRunning
+    ? (formatMinutes(elapsedMinutes) ?? "0m")
+    : formatMinutes(savedTotal);
 
   const openPanel = (e) => {
     e.stopPropagation();
@@ -391,7 +415,7 @@ const ActualTimeCell = ({ field, initialValue, taskId }) => {
         ref={triggerRef}
         onClick={openPanel}
         className={`w-full text-left text-xs px-1 py-0.5 rounded min-h-5.5 flex items-center gap-1 transition-colors hover:bg-gray-100
-          ${displayTotal > 0 || isRunning ? "text-gray-700" : "text-gray-200"}`}
+          ${savedTotal > 0 || isRunning ? "text-gray-700" : "text-gray-200"}`}
         title="Click to view time"
       >
         {isRunning && (
@@ -401,9 +425,7 @@ const ActualTimeCell = ({ field, initialValue, taskId }) => {
             </svg>
           </span>
         )}
-        {displayTotal > 0 || isRunning
-          ? (isRunning ? (formatMinutes(displayTotal) ?? "0m") : cellDisplay)
-          : "—"}
+        {savedTotal > 0 || isRunning ? cellDisplay : "—"}
       </button>
 
       {/* Panel portal */}
