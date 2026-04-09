@@ -1,6 +1,6 @@
 const { z } = require("zod");
 
-const fieldTypeEnum = z.enum(["text", "number", "dropdown", "date", "user"]);
+const fieldTypeEnum = z.enum(["text", "number", "dropdown", "date", "user", "estimated_time", "actual_time"]);
 
 const optionSchema = z.object({
   value: z.string().min(1).max(255),

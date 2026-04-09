@@ -186,6 +186,10 @@ const setTaskFieldValue = async (taskId, customFieldId, valueData) => {
     case "dropdown":
       valueRecord.valueOption = valueData.valueOption ?? null;
       break;
+    case "estimated_time":
+      valueRecord.valueNumber = valueData.valueNumber != null ? String(valueData.valueNumber) : null;
+      break;
+    // actual_time totals are managed by timeEntryService, not set directly
   }
 
   // Upsert

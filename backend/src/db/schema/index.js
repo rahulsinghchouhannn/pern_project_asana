@@ -14,6 +14,7 @@ const { taskHistory } = require("./taskHistory");
 const { taskAttachments } = require("./taskAttachments");
 const { customFields } = require("./customFields");
 const { customFieldValues } = require("./customFieldValues");
+const { timeEntries } = require("./timeEntries");
 const { roles } = require("./roles");
 const { rolePermissions } = require("./rolePermissions");
 const { userRoles } = require("./userRoles");
@@ -41,6 +42,7 @@ module.exports = {
   taskAttachments,
   customFields,
   customFieldValues,
+  timeEntries,
   roles,
   rolePermissions,
   userRoles,

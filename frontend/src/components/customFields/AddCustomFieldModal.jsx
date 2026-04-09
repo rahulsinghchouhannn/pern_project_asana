@@ -5,16 +5,12 @@ const FIELD_TYPES = [
   {
     value: "text",
     label: "Text",
-    icon: (
-      <span className="font-bold text-xs leading-none">T</span>
-    ),
+    icon: <span className="font-bold text-xs leading-none">T</span>,
   },
   {
     value: "number",
     label: "Number",
-    icon: (
-      <span className="font-bold text-xs leading-none">#</span>
-    ),
+    icon: <span className="font-bold text-xs leading-none">#</span>,
   },
   {
     value: "dropdown",
@@ -43,6 +39,15 @@ const FIELD_TYPES = [
       </svg>
     ),
   },
+  {
+    value: "timer",
+    label: "Timer",
+    icon: (
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
 ];
 
 const DEFAULT_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#8b5cf6", "#ec4899"];
@@ -58,32 +63,25 @@ const AddCustomFieldModal = ({ projectId, onCreated, onClose, anchorRef }) => {
   const [error, setError] = useState("");
   const [position, setPosition] = useState({ top: 0, right: 0 });
 
-  // Compute position below the anchor button
+  const isTimer = type === "timer";
+
   useEffect(() => {
     if (anchorRef?.current) {
       const rect = anchorRef.current.getBoundingClientRect();
-      setPosition({
-        top: rect.bottom + 6,
-        right: window.innerWidth - rect.right,
-      });
+      setPosition({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
     }
   }, [anchorRef]);
 
-  // Focus name input on open
   useEffect(() => {
-    nameInputRef.current?.focus();
-  }, []);
+    if (!isTimer) nameInputRef.current?.focus();
+  }, [isTimer]);
 
-  // Escape key closes panel
   useEffect(() => {
-    const handleKey = (e) => {
-      if (e.key === "Escape") onClose();
-    };
+    const handleKey = (e) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
-  // Click outside closes panel
   useEffect(() => {
     const handleMouseDown = (e) => {
       if (
@@ -111,13 +109,40 @@ const AddCustomFieldModal = ({ projectId, onCreated, onClose, anchorRef }) => {
   };
 
   const handleOptionChange = (index, key, val) => {
-    setOptions((prev) =>
-      prev.map((opt, i) => (i === index ? { ...opt, [key]: val } : opt))
-    );
+    setOptions((prev) => prev.map((opt, i) => (i === index ? { ...opt, [key]: val } : opt)));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+
+    if (isTimer) {
+      // Create both Estimated Time and Actual Time fields
+      setSaving(true);
+      try {
+        const [estRes, actRes] = await Promise.all([
+          customFieldService.createField(projectId, {
+            name: "Estimated Time",
+            type: "estimated_time",
+            isRequired: false,
+          }),
+          customFieldService.createField(projectId, {
+            name: "Actual Time",
+            type: "actual_time",
+            isRequired: false,
+          }),
+        ]);
+        onCreated(estRes.data.data);
+        onCreated(actRes.data.data);
+        onClose();
+      } catch (err) {
+        setError(err.response?.data?.message ?? "Failed to create timer fields");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     if (!name.trim()) { setError("Name is required"); return; }
 
     const data = { name: name.trim(), type, isRequired: false };
@@ -128,7 +153,6 @@ const AddCustomFieldModal = ({ projectId, onCreated, onClose, anchorRef }) => {
     }
 
     setSaving(true);
-    setError("");
     try {
       const res = await customFieldService.createField(projectId, data);
       onCreated(res.data.data);
@@ -147,18 +171,28 @@ const AddCustomFieldModal = ({ projectId, onCreated, onClose, anchorRef }) => {
       style={{ top: position.top, right: position.right }}
     >
       <form onSubmit={handleSubmit}>
-        {/* Field name input */}
-        <div className="p-3 border-b border-gray-100">
-          <input
-            ref={nameInputRef}
-            type="text"
-            value={name}
-            onChange={(e) => { setName(e.target.value); setError(""); }}
-            placeholder="e.g. Story Points"
-            maxLength={100}
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-400"
-          />
-        </div>
+        {/* Field name input — hidden for timer type */}
+        {!isTimer && (
+          <div className="p-3 border-b border-gray-100">
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={name}
+              onChange={(e) => { setName(e.target.value); setError(""); }}
+              placeholder="e.g. Story Points"
+              maxLength={100}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-400"
+            />
+          </div>
+        )}
+
+        {/* Timer description banner */}
+        {isTimer && (
+          <div className="px-3 py-2.5 border-b border-gray-100 bg-indigo-50/60">
+            <p className="text-xs text-indigo-700 font-medium">Creates two columns:</p>
+            <p className="text-xs text-indigo-600 mt-0.5">Estimated Time · Actual Time</p>
+          </div>
+        )}
 
         {/* Field type list */}
         <div className="py-1">
@@ -170,10 +204,7 @@ const AddCustomFieldModal = ({ projectId, onCreated, onClose, anchorRef }) => {
                 type="button"
                 onClick={() => setType(ft.value)}
                 className={`w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors text-left
-                  ${selected
-                    ? "bg-indigo-50 text-indigo-700"
-                    : "text-gray-700 hover:bg-gray-50"
-                  }`}
+                  ${selected ? "bg-indigo-50 text-indigo-700" : "text-gray-700 hover:bg-gray-50"}`}
               >
                 <span className={`w-5 h-5 flex items-center justify-center rounded shrink-0 ${selected ? "text-indigo-600" : "text-gray-500"}`}>
                   {ft.icon}
@@ -239,9 +270,7 @@ const AddCustomFieldModal = ({ projectId, onCreated, onClose, anchorRef }) => {
           </div>
         )}
 
-        {error && (
-          <p className="text-xs text-red-500 px-3 pb-1">{error}</p>
-        )}
+        {error && <p className="text-xs text-red-500 px-3 pb-1">{error}</p>}
 
         {/* Actions */}
         <div className="flex items-center justify-end gap-2 px-3 py-2.5 border-t border-gray-100">
@@ -254,10 +283,10 @@ const AddCustomFieldModal = ({ projectId, onCreated, onClose, anchorRef }) => {
           </button>
           <button
             type="submit"
-            disabled={saving || !name.trim()}
+            disabled={saving || (!isTimer && !name.trim())}
             className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
-            {saving ? "Creating…" : "Create field"}
+            {saving ? "Creating…" : isTimer ? "Create fields" : "Create field"}
           </button>
         </div>
       </form>

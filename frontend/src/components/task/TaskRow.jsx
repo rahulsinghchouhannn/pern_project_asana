@@ -1,7 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import ReactDOM from "react-dom";
+import { useSelector } from "react-redux";
 import taskService from "@/services/taskService";
 import customFieldService from "@/services/customFieldService";
+import timeEntryService from "@/services/timeEntryService";
+import { parseTimeInput, formatMinutes, describeMinutes } from "@/utils/timeFormat";
+import { getRunningTimer, setRunningTimer, subscribeTimer, getElapsedMinutes } from "@/utils/timerStore";
 import AssigneeDropdown from "./AssigneeDropdown";
 import DueDatePicker from "./DueDatePicker";
 
@@ -37,12 +41,14 @@ const getDueDateDisplay = (dateVal) => {
 const extractDisplayValue = (fieldType, valueObj) => {
   if (!valueObj) return null;
   switch (fieldType) {
-    case "text":     return valueObj.valueText ?? null;
-    case "number":   return valueObj.valueNumber != null ? Number(valueObj.valueNumber) : null;
-    case "date":     return valueObj.valueDate ?? null;
-    case "dropdown": return valueObj.valueOption ?? null;
-    case "user":     return valueObj.valueUserId ?? null;
-    default:         return null;
+    case "text":           return valueObj.valueText ?? null;
+    case "number":         return valueObj.valueNumber != null ? Number(valueObj.valueNumber) : null;
+    case "date":           return valueObj.valueDate ?? null;
+    case "dropdown":       return valueObj.valueOption ?? null;
+    case "user":           return valueObj.valueUserId ?? null;
+    case "estimated_time": return valueObj.valueNumber != null ? Number(valueObj.valueNumber) : null;
+    case "actual_time":    return valueObj.valueNumber != null ? Number(valueObj.valueNumber) : null;
+    default:               return null;
   }
 };
 
@@ -103,12 +109,452 @@ const UserFieldDropdown = ({ style, projectMembers, selectedUserId, onSelect }) 
   );
 };
 
+// ─── EstimatedTimeCell ────────────────────────────────────────────────────────
+
+const EstimatedTimeCell = ({ field, initialValue, taskId }) => {
+  const [localMinutes, setLocalMinutes] = useState(
+    () => initialValue?.valueNumber != null ? Number(initialValue.valueNumber) : null
+  );
+  const [editing, setEditing] = useState(false);
+  const [inputVal, setInputVal] = useState("");
+  const [suggestion, setSuggestion] = useState(null);
+  const lastSavedRef = useRef(localMinutes);
+  const activeEditRef = useRef(false);
+
+  useEffect(() => {
+    if (activeEditRef.current) return;
+    const v = initialValue?.valueNumber != null ? Number(initialValue.valueNumber) : null;
+    setLocalMinutes(v);
+    lastSavedRef.current = v;
+  }, [initialValue]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const doSave = async (minutes) => {
+    const prev = lastSavedRef.current;
+    try {
+      await customFieldService.setTaskFieldValue(taskId, field.id, {
+        valueNumber: minutes,
+      });
+      lastSavedRef.current = minutes;
+    } catch {
+      setLocalMinutes(prev);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const raw = e.target.value;
+    setInputVal(raw);
+    const parsed = parseTimeInput(raw);
+    setSuggestion(parsed != null ? describeMinutes(parsed) : null);
+  };
+
+  const commitEdit = () => {
+    activeEditRef.current = false;
+    setEditing(false);
+    const parsed = parseTimeInput(inputVal);
+    const minutes = parsed != null && parsed > 0 ? parsed : null;
+    setLocalMinutes(minutes);
+    setSuggestion(null);
+    doSave(minutes);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
+    if (e.key === "Escape") {
+      activeEditRef.current = false;
+      setEditing(false);
+      setSuggestion(null);
+    }
+  };
+
+  const displayed = formatMinutes(localMinutes);
+
+  if (editing) {
+    return (
+      <div className="relative w-full" onClick={(e) => e.stopPropagation()}>
+        <input
+          autoFocus
+          type="text"
+          value={inputVal}
+          onChange={handleInputChange}
+          onBlur={commitEdit}
+          onKeyDown={handleKeyDown}
+          placeholder="e.g. 1:30"
+          className="w-full text-xs bg-white border border-indigo-300 rounded px-1 py-0.5 outline-none"
+        />
+        {suggestion && (
+          <div className="absolute top-full left-0 mt-0.5 z-50 bg-white border border-gray-200 rounded-lg shadow-lg px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">
+            {suggestion}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        activeEditRef.current = true;
+        setInputVal(displayed ?? "");
+        setSuggestion(null);
+        setEditing(true);
+      }}
+      className={`w-full text-left text-xs px-1 py-0.5 rounded min-h-5.5 block transition-colors hover:bg-gray-100
+        ${displayed ? "text-gray-700" : "text-gray-200"}`}
+      title="Click to edit"
+    >
+      {displayed ?? "—"}
+    </button>
+  );
+};
+
+// ─── ActualTimeCell ───────────────────────────────────────────────────────────
+
+const ActualTimeCell = ({ field, initialValue, taskId }) => {
+  const currentUser = useSelector((state) => state.auth.user);
+  const userId = currentUser?.id;
+
+  const [savedTotal, setSavedTotal] = useState(
+    () => initialValue?.valueNumber != null ? Number(initialValue.valueNumber) : 0
+  );
+  const [showPanel, setShowPanel] = useState(false);
+  const [showAddTime, setShowAddTime] = useState(false);
+  const [addTimeInput, setAddTimeInput] = useState("");
+  const [addTimeSuggestion, setAddTimeSuggestion] = useState(null);
+  const [entries, setEntries] = useState([]);
+  const [savingTime, setSavingTime] = useState(false);
+  const [timerData, setTimerData] = useState(() => userId ? getRunningTimer(userId) : null);
+  // Tick increments every minute to update the elapsed display
+  const [, setTick] = useState(0);
+  const panelRef = useRef(null);
+  const triggerRef = useRef(null);
+  const panelPosRef = useRef({ top: 0, left: 0 });
+
+  // Sync savedTotal from prop (e.g. socket update)
+  useEffect(() => {
+    setSavedTotal(initialValue?.valueNumber != null ? Number(initialValue.valueNumber) : 0);
+  }, [initialValue]);
+
+  // Subscribe to timer store changes
+  useEffect(() => {
+    if (!userId) return;
+    const unsub = subscribeTimer(() => {
+      setTimerData(getRunningTimer(userId));
+    });
+    return unsub;
+  }, [userId]);
+
+  // Tick every minute for running timer display
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Close panel on outside click
+  useEffect(() => {
+    if (!showPanel) return;
+    const handler = (e) => {
+      if (
+        panelRef.current && !panelRef.current.contains(e.target) &&
+        triggerRef.current && !triggerRef.current.contains(e.target)
+      ) {
+        setShowPanel(false);
+        setShowAddTime(false);
+        setAddTimeInput("");
+        setAddTimeSuggestion(null);
+      }
+    };
+    document.addEventListener("mousedown", handler, true);
+    return () => document.removeEventListener("mousedown", handler, true);
+  }, [showPanel]);
+
+  const isRunning = timerData?.taskId === taskId && timerData?.customFieldId === field.id;
+  const elapsedMinutes = isRunning ? getElapsedMinutes(timerData.startedAt) : 0;
+  const displayTotal = savedTotal + elapsedMinutes;
+  const cellDisplay = formatMinutes(displayTotal);
+
+  const openPanel = (e) => {
+    e.stopPropagation();
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const panelW = 300;
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - panelW - 8));
+      panelPosRef.current = { top: rect.bottom + 4, left };
+    }
+    // Fetch entries fresh on open
+    timeEntryService.getTaskTimeEntries(taskId, field.id)
+      .then((res) => setEntries(res.data.data ?? []))
+      .catch(() => {});
+    setShowPanel(true);
+    setShowAddTime(false);
+    setAddTimeInput("");
+    setAddTimeSuggestion(null);
+  };
+
+  const handleAddTimeInputChange = (e) => {
+    const raw = e.target.value;
+    setAddTimeInput(raw);
+    const parsed = parseTimeInput(raw);
+    setAddTimeSuggestion(parsed != null ? describeMinutes(parsed) : null);
+  };
+
+  const handleAddTime = async () => {
+    const minutes = parseTimeInput(addTimeInput);
+    if (!minutes || minutes <= 0) return;
+    setSavingTime(true);
+    try {
+      const res = await timeEntryService.addTimeEntry(taskId, field.id, {
+        durationMinutes: minutes,
+        source: "manual",
+      });
+      setEntries((prev) => [res.data.data, ...prev]);
+      setSavedTotal((prev) => prev + minutes);
+      setAddTimeInput("");
+      setAddTimeSuggestion(null);
+      setShowAddTime(false);
+    } catch {
+      // keep UI as-is on error
+    } finally {
+      setSavingTime(false);
+    }
+  };
+
+  const handleAddTimeKeyDown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); handleAddTime(); }
+    if (e.key === "Escape") {
+      setShowAddTime(false);
+      setAddTimeInput("");
+      setAddTimeSuggestion(null);
+    }
+  };
+
+  const handleStartTimer = async () => {
+    if (!userId) return;
+    const existing = getRunningTimer(userId);
+
+    if (existing && !(existing.taskId === taskId && existing.customFieldId === field.id)) {
+      // Auto-save the previous timer silently
+      const elapsed = getElapsedMinutes(existing.startedAt);
+      if (elapsed > 0) {
+        try {
+          await timeEntryService.addTimeEntry(existing.taskId, existing.customFieldId, {
+            durationMinutes: elapsed,
+            source: "timer",
+          });
+        } catch {
+          // ignore — still switch the timer
+        }
+      }
+    }
+
+    setRunningTimer(userId, {
+      taskId,
+      customFieldId: field.id,
+      startedAt: new Date().toISOString(),
+    });
+  };
+
+  const handleStopTimer = async () => {
+    if (!userId || !timerData) return;
+    const elapsed = getElapsedMinutes(timerData.startedAt);
+    // Clear from localStorage immediately
+    setRunningTimer(userId, null);
+    if (elapsed > 0) {
+      try {
+        const res = await timeEntryService.addTimeEntry(taskId, field.id, {
+          durationMinutes: elapsed,
+          source: "timer",
+        });
+        setEntries((prev) => [res.data.data, ...prev]);
+        setSavedTotal((prev) => prev + elapsed);
+      } catch {}
+    }
+  };
+
+  const totalMinutesInPanel = entries.reduce((s, e) => s + e.durationMinutes, 0);
+  const totalDisplay = formatMinutes(totalMinutesInPanel) ?? "0m";
+
+  const formatLoggedAt = (dateStr) => {
+    const d = new Date(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const entryDay = new Date(d);
+    entryDay.setHours(0, 0, 0, 0);
+    if (entryDay.getTime() === today.getTime()) return "Today";
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  return (
+    <div className="relative w-full">
+      {/* Cell trigger */}
+      <button
+        ref={triggerRef}
+        onClick={openPanel}
+        className={`w-full text-left text-xs px-1 py-0.5 rounded min-h-5.5 flex items-center gap-1 transition-colors hover:bg-gray-100
+          ${displayTotal > 0 || isRunning ? "text-gray-700" : "text-gray-200"}`}
+        title="Click to view time"
+      >
+        {isRunning && (
+          <span className="shrink-0 text-red-500">
+            <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+              <circle cx="8" cy="8" r="7" />
+            </svg>
+          </span>
+        )}
+        {displayTotal > 0 || isRunning
+          ? (isRunning ? (formatMinutes(displayTotal) ?? "0m") : cellDisplay)
+          : "—"}
+      </button>
+
+      {/* Panel portal */}
+      {showPanel && ReactDOM.createPortal(
+        <div
+          ref={panelRef}
+          className="fixed z-9999 bg-white border border-gray-200 rounded-xl shadow-xl"
+          style={{ top: panelPosRef.current.top, left: panelPosRef.current.left, width: 300 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Add time input row */}
+          {showAddTime && (
+            <div className="p-3 border-b border-gray-100">
+              <div className="relative">
+                <input
+                  autoFocus
+                  type="text"
+                  value={addTimeInput}
+                  onChange={handleAddTimeInputChange}
+                  onKeyDown={handleAddTimeKeyDown}
+                  placeholder="e.g. 1:30"
+                  className="w-full text-sm border border-indigo-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                {addTimeSuggestion && (
+                  <div className="mt-1 px-1 text-xs text-gray-500 truncate">{addTimeSuggestion}</div>
+                )}
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">Today</span>
+                  {currentUser && (
+                    <span
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                      style={{ backgroundColor: getAvatarColor(currentUser.name ?? "") }}
+                    >
+                      {getInitials(currentUser.name ?? "")}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setShowAddTime(false);
+                      setAddTimeInput("");
+                      setAddTimeSuggestion(null);
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddTime}
+                    disabled={savingTime || !parseTimeInput(addTimeInput)}
+                    className="text-xs bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {savingTime ? "Saving…" : "Add time"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Entries list */}
+          <div className="max-h-48 overflow-y-auto">
+            {entries.length === 0 && !showAddTime && (
+              <p className="text-xs text-gray-400 text-center py-4">No time logged yet</p>
+            )}
+            {entries.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between px-3 py-2 border-b border-gray-50 last:border-0">
+                <span className="text-sm font-medium text-gray-800">
+                  {formatMinutes(entry.durationMinutes) ?? "0m"}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">{formatLoggedAt(entry.loggedAt)}</span>
+                  {entry.userAvatarUrl ? (
+                    <img src={entry.userAvatarUrl} alt="" className="w-5 h-5 rounded-full shrink-0 object-cover" />
+                  ) : (
+                    <span
+                      className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-white text-[9px] font-bold"
+                      style={{ backgroundColor: getAvatarColor(entry.userName ?? "") }}
+                    >
+                      {getInitials(entry.userName ?? "")}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Footer: total + action buttons */}
+          <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
+            <span className="text-sm font-semibold text-gray-800">
+              {totalDisplay} <span className="text-xs font-normal text-gray-400">TOTAL</span>
+            </span>
+            <div className="flex items-center gap-2">
+              {isRunning ? (
+                <button
+                  onClick={handleStopTimer}
+                  className="flex items-center gap-1.5 text-xs text-red-600 border border-red-200 px-2.5 py-1 rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+                    <rect x="3" y="3" width="10" height="10" rx="1" />
+                  </svg>
+                  Stop timer
+                </button>
+              ) : (
+                <button
+                  onClick={handleStartTimer}
+                  className="flex items-center gap-1.5 text-xs text-gray-600 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 16 16" stroke="currentColor">
+                    <circle cx="8" cy="8" r="6.5" strokeWidth="1.5" />
+                    <path d="M6.5 5.5l4 2.5-4 2.5V5.5z" fill="currentColor" strokeWidth="0" />
+                  </svg>
+                  Start timer
+                </button>
+              )}
+              {!showAddTime && (
+                <button
+                  onClick={() => setShowAddTime(true)}
+                  className="flex items-center gap-1 text-xs text-gray-600 border border-gray-200 px-2.5 py-1 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add time
+                </button>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+};
+
 // ─── CustomFieldCell ──────────────────────────────────────────────────────────
 
 const DROPDOWN_W = 160;
 const DROPDOWN_H = 200;
 
 const CustomFieldCell = ({ field, initialValue, taskId, projectMembers = [] }) => {
+  // Intercept timer field types first
+  if (field.type === "estimated_time") {
+    return <EstimatedTimeCell field={field} initialValue={initialValue} taskId={taskId} />;
+  }
+  if (field.type === "actual_time") {
+    return <ActualTimeCell field={field} initialValue={initialValue} taskId={taskId} />;
+  }
+
   const [localValue, setLocalValue] = useState(() => extractDisplayValue(field.type, initialValue));
   const [editing, setEditing] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -371,12 +817,9 @@ const CustomFieldCell = ({ field, initialValue, taskId, projectMembers = [] }) =
 };
 
 // ─── TaskContextMenu ──────────────────────────────────────────────────────────
-// Portal-based right-click context menu rendered at cursor position.
 
 const TaskContextMenu = ({ x, y, task, isSubtask, onClose, onConvertType, onAddSubtask, onDelete }) => {
   const menuRef = useRef(null);
-
-  // Adjust position so menu doesn't overflow viewport
   const [style, setStyle] = useState({ position: "fixed", top: y, left: x, zIndex: 9999 });
 
   useEffect(() => {
@@ -387,7 +830,6 @@ const TaskContextMenu = ({ x, y, task, isSubtask, onClose, onConvertType, onAddS
     setStyle({ position: "fixed", top: adjustedTop, left: adjustedLeft, zIndex: 9999 });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Close on any outside mousedown
   useEffect(() => {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
@@ -399,12 +841,7 @@ const TaskContextMenu = ({ x, y, task, isSubtask, onClose, onConvertType, onAddS
   const isMilestone = task.taskType === "milestone";
 
   return ReactDOM.createPortal(
-    <div
-      ref={menuRef}
-      style={style}
-      className="w-52 bg-white border border-gray-200 rounded-xl shadow-xl py-1"
-    >
-      {/* Convert to Milestone / Convert to Task */}
+    <div ref={menuRef} style={style} className="w-52 bg-white border border-gray-200 rounded-xl shadow-xl py-1">
       <button
         onClick={() => { onClose(); onConvertType(isMilestone ? "task" : "milestone"); }}
         className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
@@ -426,7 +863,6 @@ const TaskContextMenu = ({ x, y, task, isSubtask, onClose, onConvertType, onAddS
         )}
       </button>
 
-      {/* Add subtask — hidden for subtasks (one level deep only) */}
       {!isSubtask && (
         <button
           onClick={() => { onClose(); onAddSubtask(); }}
@@ -441,7 +877,6 @@ const TaskContextMenu = ({ x, y, task, isSubtask, onClose, onConvertType, onAddS
 
       <div className="my-1 border-t border-gray-100" />
 
-      {/* Delete task */}
       <button
         onClick={() => { onClose(); onDelete(); }}
         className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
@@ -468,13 +903,11 @@ const TaskRow = ({
   fieldValues = [],
   onUpdated,
   onOpenDetail,
-  // Subtask / context menu callbacks
   isSubtask = false,
   expanded = false,
   onToggleExpand,
   onAddSubtask,
   onDeleteTask,
-  // Drag-and-drop props (optional — provided by @hello-pangea/dnd Draggable)
   innerRef,
   draggableProps,
   dragHandleProps,
@@ -486,17 +919,14 @@ const TaskRow = ({
   const [taskType, setTaskType] = useState(task.taskType ?? "task");
   const [showAssignee, setShowAssignee] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [contextMenu, setContextMenu] = useState(null); // { x, y } | null
+  const [contextMenu, setContextMenu] = useState(null);
   const debounceRef = useRef(null);
   const assigneeTriggerRef = useRef(null);
   const dateTriggerRef = useRef(null);
   const isEditingTitleRef = useRef(false);
 
-  // Sync from socket updates
   useEffect(() => {
-    if (!isEditingTitleRef.current) {
-      setTitle(task.title ?? "");
-    }
+    if (!isEditingTitleRef.current) setTitle(task.title ?? "");
     setAssignees(task.assignees ?? []);
     setDueDate(task.dueDate ?? null);
     setIsCompleted(task.isCompleted ?? false);
@@ -510,8 +940,6 @@ const TaskRow = ({
 
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
-  // ── Context menu ───────────────────────────────────────────────────────────
-
   const handleContextMenu = (e) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY });
@@ -519,24 +947,17 @@ const TaskRow = ({
 
   const handleConvertType = async (newType) => {
     const prevType = taskType;
-    setTaskType(newType); // optimistic
+    setTaskType(newType);
     try {
       const res = await taskService.updateTask(task.id, { taskType: newType });
       onUpdated?.(res.data.data);
     } catch {
-      setTaskType(prevType); // revert
+      setTaskType(prevType);
     }
   };
 
-  const handleDelete = () => {
-    onDeleteTask?.(task.id, task.parentTaskId ?? null);
-  };
-
-  const handleAddSubtaskClick = () => {
-    onAddSubtask?.(task.id);
-  };
-
-  // ── Title / completion / assignee / date ───────────────────────────────────
+  const handleDelete = () => onDeleteTask?.(task.id, task.parentTaskId ?? null);
+  const handleAddSubtaskClick = () => onAddSubtask?.(task.id);
 
   const handleTitleChange = (e) => {
     const val = e.target.value;
@@ -570,9 +991,7 @@ const TaskRow = ({
     setShowAssignee(false);
     try {
       const existing = assignees.filter((a) => a.userId !== member.userId);
-      for (const a of existing) {
-        await taskService.removeAssignee(task.id, a.userId);
-      }
+      for (const a of existing) await taskService.removeAssignee(task.id, a.userId);
       const res = await taskService.addAssignee(task.id, member.userId);
       onUpdated?.(res.data.data);
     } catch {
@@ -595,12 +1014,8 @@ const TaskRow = ({
   const firstName = primaryAssignee?.name?.split(" ")[0] ?? null;
   const dateDisplay = getDueDateDisplay(dueDate);
   const isMilestone = taskType === "milestone";
-
-  // Subtask count: prefer loaded subtasks length if expanded, else server-reported count
   const subtaskCount = task.subtaskCount ?? 0;
   const hasSubtasks = subtaskCount > 0 || expanded;
-
-  // Left padding depends on whether this is a subtask row
   const nameCellPadding = isSubtask ? "pl-12" : "pl-2";
 
   return (
@@ -614,7 +1029,6 @@ const TaskRow = ({
         {/* ── Name ─────────────────────────────────────────── */}
         <td className={`py-0 ${nameCellPadding} pr-2 w-125 overflow-hidden border-r border-gray-200`}>
           <div className="flex items-center gap-1 h-10 min-w-0 overflow-hidden">
-            {/* Drag handle — shown on hover when DnD is active (root tasks only) */}
             {!isSubtask && dragHandleProps ? (
               <span
                 {...dragHandleProps}
@@ -629,7 +1043,6 @@ const TaskRow = ({
               <span className="shrink-0 w-4" />
             )}
 
-            {/* Expand/collapse arrow — only for root tasks that have subtasks */}
             {!isSubtask && hasSubtasks ? (
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleExpand?.(task.id); }}
@@ -647,7 +1060,6 @@ const TaskRow = ({
               <span className="shrink-0 w-4" />
             ) : null}
 
-            {/* Completion toggle: circle for task, diamond for milestone */}
             {isMilestone ? (
               <button
                 onClick={handleToggleComplete}
@@ -669,9 +1081,7 @@ const TaskRow = ({
               <button
                 onClick={handleToggleComplete}
                 className={`shrink-0 w-4 h-4 rounded-full border-2 transition-colors ${
-                  isCompleted
-                    ? "bg-indigo-500 border-indigo-500"
-                    : "border-gray-300 hover:border-indigo-400"
+                  isCompleted ? "bg-indigo-500 border-indigo-500" : "border-gray-300 hover:border-indigo-400"
                 }`}
                 title={isCompleted ? "Reopen" : "Complete"}
               />
@@ -689,7 +1099,6 @@ const TaskRow = ({
                 ${isCompleted ? "line-through text-gray-400" : isMilestone ? "font-semibold text-gray-800" : "text-gray-800"}`}
             />
 
-            {/* Subtask count badge — only on root tasks */}
             {!isSubtask && subtaskCount > 0 && (
               <span className="shrink-0 text-xs text-gray-400 bg-gray-100 rounded px-1 flex items-center gap-0.5">
                 {subtaskCount}
@@ -722,11 +1131,7 @@ const TaskRow = ({
             {primaryAssignee ? (
               <>
                 {primaryAssignee.avatarUrl ? (
-                  <img
-                    src={primaryAssignee.avatarUrl}
-                    alt={primaryAssignee.name}
-                    className="w-6 h-6 rounded-full object-cover shrink-0"
-                  />
+                  <img src={primaryAssignee.avatarUrl} alt={primaryAssignee.name} className="w-6 h-6 rounded-full object-cover shrink-0" />
                 ) : (
                   <div
                     className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
@@ -804,7 +1209,6 @@ const TaskRow = ({
         <td />
       </tr>
 
-      {/* Context menu portal */}
       {contextMenu && (
         <TaskContextMenu
           x={contextMenu.x}

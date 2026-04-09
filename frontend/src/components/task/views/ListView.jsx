@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useSelector } from "react-redux";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import TaskRow from "../TaskRow";
 import TaskDetailModal from "../TaskDetailModal";
@@ -10,15 +11,19 @@ import sectionService from "@/services/sectionService";
 import taskService from "@/services/taskService";
 import socketService from "@/services/socketService";
 import AddCustomFieldModal from "@/components/customFields/AddCustomFieldModal";
+import { formatMinutes } from "@/utils/timeFormat";
+import { getRunningTimer, subscribeTimer, getElapsedMinutes } from "@/utils/timerStore";
 
 // ─── Field type icons ─────────────────────────────────────────────────────────
 
 const FIELD_TYPE_ICONS = {
-  text:     <span className="font-bold text-[10px]">T</span>,
-  number:   <span className="font-bold text-[10px]">#</span>,
-  dropdown: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>,
-  date:     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-  user:     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" /></svg>,
+  text:           <span className="font-bold text-[10px]">T</span>,
+  number:         <span className="font-bold text-[10px]">#</span>,
+  dropdown:       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>,
+  date:           <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  user:           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" /></svg>,
+  estimated_time: <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  actual_time:    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
 };
 
 // The "unsectioned" droppable id — reserved, never matches a real section id
@@ -94,12 +99,23 @@ const ListView = ({
   onSectionUpdated,
   onSectionDeleted,
 }) => {
+  const currentUser = useSelector((state) => state.auth.user);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [customFields, setCustomFields] = useState([]);
   const [visibleFieldIds, setVisibleFieldIds] = useState([]);
   const [fieldValuesMap, setFieldValuesMap] = useState({});
   const [showAddField, setShowAddField] = useState(false);
   const addFieldBtnRef = useRef(null);
+
+  // Running timer state — re-read from localStorage whenever timerStore notifies
+  const [runningTimer, setRunningTimerState] = useState(
+    () => currentUser?.id ? getRunningTimer(currentUser.id) : null
+  );
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const unsub = subscribeTimer(() => setRunningTimerState(getRunningTimer(currentUser.id)));
+    return unsub;
+  }, [currentUser?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Local sections state
   const [sections, setSections] = useState(sectionsProp);
@@ -977,6 +993,64 @@ const ListView = ({
                 </td>
               </tr>
             </tbody>
+
+            {/* ── Timer SUM row ──────────────────────────────────────────── */}
+            {(() => {
+              const timerFields = visibleFields.filter(
+                (f) => f.type === "estimated_time" || f.type === "actual_time"
+              );
+              if (timerFields.length === 0) return null;
+
+              // Sum each timer field across all visible root tasks
+              const allVisibleTasks = [
+                ...unsectionedTasks,
+                ...sections.flatMap((s) => tasksBySection[s.id] ?? []),
+              ];
+
+              return (
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200 bg-gray-50/50">
+                    {/* Name col */}
+                    <td className="py-1.5 pl-10 pr-2 text-xs font-medium text-gray-400 border-r border-gray-200">
+                    </td>
+                    {/* Assignee col */}
+                    <td className="py-1.5 px-3 border-r border-gray-200" />
+                    {/* Due date col */}
+                    <td className="py-1.5 px-3 border-r border-gray-200" />
+                    {/* Custom field cols */}
+                    {visibleFields.map((field) => {
+                      if (field.type !== "estimated_time" && field.type !== "actual_time") {
+                        return <td key={field.id} className="py-1.5 px-2 border-r border-gray-200" />;
+                      }
+                      let sum = 0;
+                      allVisibleTasks.forEach((t) => {
+                        const vals = fieldValuesMap[t.id] ?? [];
+                        const v = vals.find((v) => v.customFieldId === field.id);
+                        if (v?.valueNumber) sum += Number(v.valueNumber);
+                      });
+                      // For actual_time, add elapsed from running timer if it targets this field
+                      if (
+                        field.type === "actual_time" &&
+                        runningTimer?.customFieldId === field.id
+                      ) {
+                        sum += getElapsedMinutes(runningTimer.startedAt);
+                      }
+                      return (
+                        <td key={field.id} className="py-1.5 px-2 border-r border-gray-200">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">SUM</span>
+                            <span className="text-xs font-semibold text-gray-600">
+                              {formatMinutes(sum) ?? "0m"}
+                            </span>
+                          </div>
+                        </td>
+                      );
+                    })}
+                    <td />
+                  </tr>
+                </tfoot>
+              );
+            })()}
 
           </table>
         </DragDropContext>
