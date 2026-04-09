@@ -121,6 +121,7 @@ const ListView = ({
   const [subtasksMap, setSubtasksMap] = useState({});
   // addingSubtaskFor: parentTaskId | null — shows inline input below that task
   const [addingSubtaskFor, setAddingSubtaskFor] = useState(null);
+  const [subtaskInputKey, setSubtaskInputKey] = useState(0);
   // Ref so socket handlers can read current expanded state without stale closure
   const expandedTaskIdsRef = useRef(new Set());
   // Track locally created subtask IDs to suppress the socket echo after creation.
@@ -574,8 +575,9 @@ const ListView = ({
           <TaskRow key={subtask.id} {...subtaskRowProps(subtask)} />
         ))}
 
-        {addingSubtaskFor === parentTask.id ? (
+        {addingSubtaskFor === parentTask.id && (
           <InlineTaskRow
+            key={subtaskInputKey}
             parentTaskId={parentTask.id}
             statusId={defaultStatusId}
             sectionId={parentTask.sectionId ?? null}
@@ -609,21 +611,23 @@ const ListView = ({
             onClose={() => setAddingSubtaskFor(null)}
             onOpenDetail={handleOpenDetail}
           />
-        ) : (
-          <tr>
-            <td colSpan={colCount + 1} className="py-1 pl-16">
-              <button
-                onClick={() => setAddingSubtaskFor(parentTask.id)}
-                className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Add subtask…
-              </button>
-            </td>
-          </tr>
         )}
+        <tr>
+          <td colSpan={colCount + 1} className="py-1 pl-16">
+            <button
+              onClick={() => {
+                setSubtaskInputKey((k) => k + 1);
+                setAddingSubtaskFor(parentTask.id);
+              }}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+            >
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add subtask…
+            </button>
+          </td>
+        </tr>
       </>
     );
   };
