@@ -104,6 +104,11 @@ const ListView = ({
   const [sections, setSections] = useState(sectionsProp);
   const [collapsedMap, setCollapsedMap] = useState({});
 
+  // Section drag-and-drop state (native HTML5 DnD)
+  const [draggingSectionId, setDraggingSectionId] = useState(null);
+  // sectionDropIndex: insertion point in the sections array (0 = before first, N = after Nth)
+  const [sectionDropIndex, setSectionDropIndex] = useState(null);
+
   // Inline task creation
   const [activeInlineArea, setActiveInlineArea] = useState(null);
 
@@ -138,6 +143,16 @@ const ListView = ({
 
   // Sync sections whenever the prop changes
   useEffect(() => { setSections(sectionsProp); }, [sectionsProp]);
+
+  // Real-time section reorder from other members
+  useEffect(() => {
+    if (!projectId) return;
+    const handleSectionReordered = ({ sections: newSections }) => {
+      setSections(newSections);
+    };
+    socketService.on("section:reordered", handleSectionReordered);
+    return () => socketService.off("section:reordered", handleSectionReordered);
+  }, [projectId]);
 
   // ── Custom fields ──────────────────────────────────────────────────────────
 
@@ -496,6 +511,66 @@ const ListView = ({
     onOpenDetail: handleOpenDetail,
   });
 
+  // ── Section drag-and-drop (native HTML5 DnD) ──────────────────────────────
+
+  const handleSectionDragStart = useCallback((sectionId) => {
+    setDraggingSectionId(sectionId);
+  }, []);
+
+  const handleSectionDragEnd = useCallback(() => {
+    setDraggingSectionId(null);
+    setSectionDropIndex(null);
+  }, []);
+
+  // Attached to both the header <tbody> and tasks <tbody> of every section.
+  // Guard: only active while a section drag is in progress — task drags leave
+  // draggingSectionId null so this handler returns immediately without touching
+  // the event, letting @hello-pangea/dnd process task drags unimpeded.
+  const handleSectionDragOver = useCallback((e, sectionIndex) => {
+    if (!draggingSectionId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const rect = e.currentTarget.getBoundingClientRect();
+    const insertBefore = e.clientY < rect.top + rect.height / 2;
+    setSectionDropIndex(insertBefore ? sectionIndex : sectionIndex + 1);
+  }, [draggingSectionId]);
+
+  const handleSectionDrop = useCallback(async (e) => {
+    e.preventDefault();
+    if (!draggingSectionId || sectionDropIndex === null) {
+      setDraggingSectionId(null);
+      setSectionDropIndex(null);
+      return;
+    }
+    const srcIdx = sections.findIndex((s) => s.id === draggingSectionId);
+    if (
+      srcIdx === -1 ||
+      sectionDropIndex === srcIdx ||
+      sectionDropIndex === srcIdx + 1
+    ) {
+      // No real movement — cancel cleanly
+      setDraggingSectionId(null);
+      setSectionDropIndex(null);
+      return;
+    }
+
+    // Build new ordered array
+    const reordered = sections.filter((s) => s.id !== draggingSectionId);
+    const insertAt = sectionDropIndex > srcIdx ? sectionDropIndex - 1 : sectionDropIndex;
+    reordered.splice(insertAt, 0, sections[srcIdx]);
+
+    const prevSections = [...sections];
+    setSections(reordered);           // optimistic update
+    setDraggingSectionId(null);
+    setSectionDropIndex(null);
+
+    try {
+      await sectionService.reorderSections(projectId, reordered.map((s) => s.id));
+    } catch {
+      setSections(prevSections);      // revert on API error
+    }
+  }, [draggingSectionId, sectionDropIndex, sections, projectId]);
+
   // ── Task drag-and-drop ─────────────────────────────────────────────────────
 
   const handleDragEnd = useCallback(async (result) => {
@@ -723,14 +798,27 @@ const ListView = ({
             </Droppable>
 
             {/* ── Sections ──────────────────────────────────────────────────── */}
+
+            {/* Drop indicator before the first section */}
+            {draggingSectionId && sectionDropIndex === 0 && (
+              <tbody>
+                <tr><td colSpan={colCount + 2} className="p-0"><div className="h-0.5 bg-indigo-500 mx-2" /></td></tr>
+              </tbody>
+            )}
+
             {sections.map((section, sectionIndex) => {
               const sectionTasks = tasksBySection[section.id] ?? [];
               const isCollapsed = !!collapsedMap[section.id];
+              const isDragging = draggingSectionId === section.id;
 
               return (
                 <React.Fragment key={section.id}>
                   {/* Section header */}
-                  <tbody>
+                  <tbody
+                    style={{ opacity: isDragging ? 0.4 : 1 }}
+                    onDragOver={(e) => handleSectionDragOver(e, sectionIndex)}
+                    onDrop={handleSectionDrop}
+                  >
                     <SectionRow
                       section={section}
                       projectId={projectId}
@@ -744,6 +832,8 @@ const ListView = ({
                       onMoveUp={sectionIndex > 0 ? () => handleMoveSection(section.id, "up") : null}
                       onMoveDown={sectionIndex < sections.length - 1 ? () => handleMoveSection(section.id, "down") : null}
                       colCount={colCount}
+                      onSectionDragStart={handleSectionDragStart}
+                      onSectionDragEnd={handleSectionDragEnd}
                     />
                   </tbody>
 
@@ -751,7 +841,13 @@ const ListView = ({
                   {!isCollapsed && (
                     <Droppable droppableId={section.id} type="TASK">
                       {(provided) => (
-                        <tbody ref={provided.innerRef} {...provided.droppableProps}>
+                        <tbody
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          style={{ opacity: isDragging ? 0.4 : 1 }}
+                          onDragOver={(e) => handleSectionDragOver(e, sectionIndex)}
+                          onDrop={handleSectionDrop}
+                        >
                           {sectionTasks.map((task, taskIndex) => (
                             <React.Fragment key={task.id}>
                               <Draggable draggableId={task.id} index={taskIndex}>
@@ -777,12 +873,22 @@ const ListView = ({
                       )}
                     </Droppable>
                   )}
+
+                  {/* Drop indicator after this section */}
+                  {draggingSectionId && sectionDropIndex === sectionIndex + 1 && (
+                    <tbody>
+                      <tr><td colSpan={colCount + 2} className="p-0"><div className="h-0.5 bg-indigo-500 mx-2" /></td></tr>
+                    </tbody>
+                  )}
                 </React.Fragment>
               );
             })}
 
             {/* ── Add section ───────────────────────────────────────────────── */}
-            <tbody>
+            <tbody
+              onDragOver={(e) => handleSectionDragOver(e, sections.length)}
+              onDrop={handleSectionDrop}
+            >
               {showAddSection && (
                 <AddSectionInlineRow
                   key={sectionInputKey}

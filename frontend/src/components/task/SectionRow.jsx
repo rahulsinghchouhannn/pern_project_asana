@@ -5,17 +5,18 @@ import sectionService from "@/services/sectionService";
  * SectionRow — collapsible section header rendered as a <tr> inside the list table.
  *
  * Props:
- *  section          – { id, name, position }
- *  projectId        – UUID
- *  taskCount        – number of tasks in this section (shown when collapsed)
- *  collapsed        – boolean controlled by parent
- *  onToggle()       – toggle collapsed state in parent
- *  onUpdated(s)     – called after section rename persists
- *  onDeleteOnly()   – called when "Delete section only" is confirmed
- *  onDeleteWithTasks() – called when "Delete section and all tasks" is confirmed
- *  onAddTask()      – called when "+" is clicked
- *  colCount         – total column count (for colSpan)
- *  dragHandleProps  – @hello-pangea/dnd drag handle props (optional)
+ *  section              – { id, name, position }
+ *  projectId            – UUID
+ *  taskCount            – number of tasks in this section (shown when collapsed)
+ *  collapsed            – boolean controlled by parent
+ *  onToggle()           – toggle collapsed state in parent
+ *  onUpdated(s)         – called after section rename persists
+ *  onDeleteOnly()       – called when "Delete section only" is confirmed
+ *  onDeleteWithTasks()  – called when "Delete section and all tasks" is confirmed
+ *  onAddTask()          – called when "+" is clicked
+ *  colCount             – total column count (for colSpan)
+ *  onSectionDragStart(sectionId) – native HTML5 drag start callback
+ *  onSectionDragEnd()            – native HTML5 drag end callback
  */
 const SectionRow = ({
   section,
@@ -30,7 +31,8 @@ const SectionRow = ({
   onMoveUp,
   onMoveDown,
   colCount = 4,
-  dragHandleProps,
+  onSectionDragStart,
+  onSectionDragEnd,
 }) => {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(section.name);
@@ -112,18 +114,22 @@ const SectionRow = ({
     <tr className="group/section border-t-2 border-b border-gray-200 bg-gray-50/60">
       <td colSpan={colCount + 1} className="py-0 pr-2">
         <div className="flex items-center h-9 gap-1">
-          {/* Section drag handle */}
-          {dragHandleProps && (
-            <span
-              {...dragHandleProps}
-              className="shrink-0 opacity-0 group-hover/section:opacity-100 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-opacity select-none px-1"
-              title="Drag to reorder section"
-            >
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
-              </svg>
-            </span>
-          )}
+          {/* Section drag handle — native HTML5 drag */}
+          <span
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = "move";
+              e.dataTransfer.setData("text/plain", section.id);
+              onSectionDragStart?.(section.id);
+            }}
+            onDragEnd={onSectionDragEnd}
+            className="shrink-0 opacity-0 group-hover/section:opacity-100 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-opacity select-none px-1"
+            title="Drag to reorder section"
+          >
+            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
+            </svg>
+          </span>
 
           {/* Collapse arrow */}
           <button
