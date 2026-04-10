@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchOrgProjects } from "@/store/slices/projectSlice";
@@ -54,8 +54,33 @@ const SettingsIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
   </svg>
 );
+const ChevronRightIcon = () => (
+  <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+  </svg>
+);
 
 // ─── Small Components ─────────────────────────────────────────────────────────
+
+const TeamNavItem = ({ to, orgName }) => (
+  <NavLink
+    to={to}
+    className={({ isActive }) =>
+      `flex items-center gap-2.5 px-3 rounded transition-colors text-[14px] ${
+        isActive
+          ? "bg-[rgba(255,255,255,0.1)] text-[#F1F1F1]"
+          : "text-[#F1F1F1] hover:bg-[rgba(255,255,255,0.08)]"
+      }`
+    }
+    style={{ paddingTop: "6px", paddingBottom: "6px", borderRadius: "4px" }}
+  >
+    <TeamIcon />
+    <span className="flex-1 truncate">{orgName}</span>
+    <span style={{ color: "rgba(255,255,255,0.35)" }}>
+      <ChevronRightIcon />
+    </span>
+  </NavLink>
+);
 
 const NavItem = ({ to, icon, label }) => (
   <NavLink
@@ -237,7 +262,7 @@ const Sidebar = () => {
           <NavItem to="/goals" icon={<GoalIcon />} label="Goals" />
         </div>
 
-        {/* Projects section — scrollable */}
+        {/* Projects section — grows to fill space, scrolls independently */}
         <div className="flex flex-col flex-1 overflow-hidden min-h-0">
           <div className="flex items-center justify-between px-3 pb-1 shrink-0" style={{ marginTop: "8px" }}>
             <span className="font-semibold uppercase tracking-wider" style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>
@@ -255,7 +280,6 @@ const Sidebar = () => {
               </button>
             )}
           </div>
-
           <div className="flex-1 overflow-y-auto flex flex-col gap-0.5 scrollbar-sidebar">
             {projects.length === 0 ? (
               <p className="px-3 text-xs text-gray-600">No projects yet</p>
@@ -281,41 +305,43 @@ const Sidebar = () => {
           </div>
         </div>
 
-        {/* Workspaces section */}
-        <div className="flex flex-col gap-0.5 shrink-0 max-h-[200px] overflow-y-auto scrollbar-sidebar">
+        {/* Workspaces section — separate, scrolls independently */}
+        <div className="flex flex-col shrink-0">
           <SectionLabel>Workspaces</SectionLabel>
-          {sortedOrgs.map((org) => {
-            const isActive = org.id === currentOrg?.id;
-            return (
-              <button
-                key={org.id}
-                onClick={() => handleSwitchOrg(org.id)}
-                disabled={isSwitching}
-                className={`flex items-center justify-between w-full px-3 rounded text-[13px] text-left transition-colors ${
-                  isActive
-                    ? "bg-[rgba(255,255,255,0.12)] text-[#F1F1F1]"
-                    : "text-[#C0C0C0] hover:bg-[rgba(255,255,255,0.06)] hover:text-[#F1F1F1]"
-                }`}
-                style={{ paddingTop: "5px", paddingBottom: "5px", borderRadius: "4px" }}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div
-                    className="w-4 h-4 rounded flex items-center justify-center text-white shrink-0"
-                    style={{ fontSize: "9px", fontWeight: 700, backgroundColor: orgColor(org.name) }}
-                  >
-                    {orgInitial(org.name)}
-                  </div>
-                  <span className="truncate">{org.name}</span>
-                </div>
-                <span
-                  className="shrink-0 ml-2 capitalize"
-                  style={{ fontSize: "10px", color: "rgba(255,255,255,0.35)" }}
+          <div className="overflow-y-auto scrollbar-sidebar" style={{ maxHeight: "140px" }}>
+            {sortedOrgs.map((org) => {
+              const isActive = org.id === currentOrg?.id;
+              return (
+                <button
+                  key={org.id}
+                  onClick={() => handleSwitchOrg(org.id)}
+                  disabled={isSwitching}
+                  className={`flex items-center justify-between w-full px-3 rounded text-[13px] text-left transition-colors ${
+                    isActive
+                      ? "bg-[rgba(255,255,255,0.12)] text-[#F1F1F1]"
+                      : "text-[#C0C0C0] hover:bg-[rgba(255,255,255,0.06)] hover:text-[#F1F1F1]"
+                  }`}
+                  style={{ paddingTop: "5px", paddingBottom: "5px", borderRadius: "4px" }}
                 >
-                  {org.role}
-                </span>
-              </button>
-            );
-          })}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div
+                      className="w-4 h-4 rounded flex items-center justify-center text-white shrink-0"
+                      style={{ fontSize: "9px", fontWeight: 700, backgroundColor: orgColor(org.name) }}
+                    >
+                      {orgInitial(org.name)}
+                    </div>
+                    <span className="truncate">{org.name}</span>
+                  </div>
+                  <span
+                    className="shrink-0 ml-2 capitalize"
+                    style={{ fontSize: "10px", color: "rgba(255,255,255,0.35)" }}
+                  >
+                    {org.role}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-3 text-[13px] text-[rgba(255,255,255,0.4)] hover:text-[#F1F1F1] transition-colors"
@@ -331,7 +357,7 @@ const Sidebar = () => {
         {/* Static: Team + Settings */}
         <div className="flex flex-col gap-0.5 shrink-0">
           <SectionLabel>Team</SectionLabel>
-          <NavItem to="/team" icon={<TeamIcon />} label={currentOrg?.name ?? "Team"} />
+          <TeamNavItem to="/team" orgName={currentOrg?.name ?? "Team"} />
 
           {can("view_org_settings") && (
             <>

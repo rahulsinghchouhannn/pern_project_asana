@@ -90,6 +90,15 @@ router.delete(
   organizationController.cancelInvitation
 );
 
+// DELETE /api/organizations/:orgId — delete organization (owner only)
+router.delete(
+  "/:orgId",
+  authMiddleware,
+  orgMiddleware,
+  requirePermission(PERMISSIONS.DELETE_ORGANIZATION),
+  organizationController.deleteOrg
+);
+
 // POST /api/invitations/accept — accept invitation (auth required)
 router.post(
   "/invitations/accept",

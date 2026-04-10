@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const { eq, and, desc } = require("drizzle-orm");
 const { db } = require("../db");
-const { organizations, organizationMembers, invitations, users, roles, rolePermissions, userRoles, projectMembers } = require("../db/schema");
+const { organizations, organizationMembers, invitations, users, roles, rolePermissions, userRoles, projectMembers, notifications, activityLogs } = require("../db/schema");
 const { ALL_PERMISSIONS, ADMIN_PERMISSIONS, MEMBER_PERMISSIONS } = require("../config/permissions");
 const activityService = require("./activityService");
 const notificationService = require("./notificationService");
@@ -433,6 +433,51 @@ const getOrgMembers = async (orgId) => {
   return rows;
 };
 
+const deleteOrganization = async (orgId, requestingUserId) => {
+  // Verify requester is the owner
+  const [ownerRole] = await db
+    .select({ id: roles.id })
+    .from(roles)
+    .where(
+      and(
+        eq(roles.organizationId, orgId),
+        eq(roles.name, "Owner"),
+        eq(roles.isSystem, true)
+      )
+    )
+    .limit(1);
+
+  if (ownerRole) {
+    const [ownerEntry] = await db
+      .select({ userId: userRoles.userId })
+      .from(userRoles)
+      .where(
+        and(
+          eq(userRoles.organizationId, orgId),
+          eq(userRoles.roleId, ownerRole.id),
+          eq(userRoles.userId, requestingUserId)
+        )
+      )
+      .limit(1);
+
+    if (!ownerEntry) {
+      const err = new Error("Only the organization owner can delete this organization");
+      err.statusCode = 403;
+      throw err;
+    }
+  }
+
+  // Pre-delete tables without cascade on organizationId
+  await db.delete(notifications).where(eq(notifications.organizationId, orgId));
+  await db.delete(activityLogs).where(eq(activityLogs.organizationId, orgId));
+
+  // Delete the organization — cascades to all other related tables
+  await db.delete(organizations).where(eq(organizations.id, orgId));
+
+  logger.info({ message: "Organization deleted", orgId, requestingUserId });
+  return { success: true };
+};
+
 const removeMember = async (orgId, targetUserId, requestingUserId) => {
   if (targetUserId === requestingUserId) {
     const err = new Error("Cannot remove yourself from the organization");
@@ -493,6 +538,11 @@ const removeMember = async (orgId, targetUserId, requestingUserId) => {
     .delete(organizationMembers)
     .where(eq(organizationMembers.id, membership.id));
 
+  // Also remove from all projects in this org
+  await db
+    .delete(projectMembers)
+    .where(eq(projectMembers.userId, targetUserId));
+
   logger.info({ message: "Member removed", orgId, targetUserId });
   return { success: true };
 };
@@ -509,4 +559,5 @@ module.exports = {
   rejectInvitation,
   getOrgMembers,
   removeMember,
+  deleteOrganization,
 };

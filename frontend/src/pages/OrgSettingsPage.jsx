@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
-import { useAppSelector } from "@/store/hooks";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { useAppSelector, useAppDispatch } from "@/store/hooks";
+import { deleteOrganization } from "@/store/slices/authSlice";
 import organizationService from "@/services/organizationService";
 import permissionService from "@/services/permissionService";
 import usePermissions from "@/hooks/usePermissions";
@@ -12,7 +13,6 @@ import Spinner from "@/components/ui/Spinner";
 import RoleEditor from "@/components/permissions/RoleEditor";
 import { useToast } from "@/components/ui/Toast";
 
-const TABS = ["Members", "Roles", "Invitations"];
 const TAB_PARAM = "tab";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -76,6 +76,7 @@ const MembersTab = ({ orgId, can }) => {
   const [error, setError] = useState(null);
   const [savingRole, setSavingRole] = useState(null);
   const [removing, setRemoving] = useState(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -143,6 +144,11 @@ const MembersTab = ({ orgId, can }) => {
           <h2 className="text-base font-semibold text-gray-900">Members</h2>
           <p className="text-sm text-gray-500">{members.length} member{members.length !== 1 ? "s" : ""}</p>
         </div>
+        {can("invite_user") && (
+          <Button variant="primary" size="sm" onClick={() => setShowInviteModal(true)}>
+            Invite people
+          </Button>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -156,6 +162,7 @@ const MembersTab = ({ orgId, can }) => {
           <tbody className="divide-y divide-gray-100">
             {members.map((m) => {
               const isCurrentUser = m.userId === currentUser?.id;
+              const isOwner = m.role === "owner";
               return (
                 <tr key={m.userId}>
                   <td className="py-3">
@@ -179,7 +186,7 @@ const MembersTab = ({ orgId, can }) => {
                     </div>
                   </td>
                   <td className="py-3">
-                    {can("manage_roles") && !isCurrentUser && m.role !== "owner" ? (
+                    {can("manage_roles") && !isCurrentUser && !isOwner ? (
                       <select
                         value={roles.find((r) => r.name.toLowerCase() === m.role)?.id ?? ""}
                         onChange={(e) => handleRoleChange(m.userId, e.target.value)}
@@ -199,7 +206,7 @@ const MembersTab = ({ orgId, can }) => {
                   </td>
                   {can("remove_user") && (
                     <td className="py-3 text-right">
-                      {!isCurrentUser && (
+                      {!isCurrentUser && !isOwner && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -218,6 +225,13 @@ const MembersTab = ({ orgId, can }) => {
           </tbody>
         </table>
       </div>
+
+      <InviteModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        orgId={orgId}
+        onSuccess={fetchData}
+      />
     </div>
   );
 };
@@ -283,6 +297,9 @@ const RolesTab = ({ orgId, can }) => {
 
   if (loading) return <div className="flex justify-center py-10"><Spinner /></div>;
 
+  // Owner role is never shown — it is system-managed and not manually assignable
+  const visibleRoles = roles.filter((r) => r.name.toLowerCase() !== "owner");
+
   return (
     <div className="space-y-3">
       {can("manage_roles") && (
@@ -293,7 +310,7 @@ const RolesTab = ({ orgId, can }) => {
         </div>
       )}
 
-      {roles.map((role) => (
+      {visibleRoles.map((role) => (
         <div key={role.id} className="border border-gray-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
@@ -469,14 +486,12 @@ const InvitationsTab = ({ orgId, can }) => {
 
   const handleCancel = async (invitationId, email) => {
     if (!window.confirm(`Cancel the invitation for ${email}?`)) return;
-    // Optimistic remove
     setInvitations((prev) => prev.filter((inv) => inv.id !== invitationId));
     setCancelling(invitationId);
     try {
       await organizationService.cancelInvitation(orgId, invitationId);
       showToast("Invitation cancelled", "success");
     } catch (err) {
-      // Revert on failure
       fetchInvitations();
       showToast(extractErrorMessage(err), "error");
     } finally {
@@ -504,7 +519,6 @@ const InvitationsTab = ({ orgId, can }) => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-gray-900">Invitations</h2>
         {can("invite_user") && (
@@ -514,7 +528,6 @@ const InvitationsTab = ({ orgId, can }) => {
         )}
       </div>
 
-      {/* Empty state */}
       {invitations.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <svg className="w-12 h-12 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -533,7 +546,6 @@ const InvitationsTab = ({ orgId, can }) => {
         </div>
       )}
 
-      {/* Pending section */}
       {pending.length > 0 && (
         <div>
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
@@ -579,7 +591,6 @@ const InvitationsTab = ({ orgId, can }) => {
         </div>
       )}
 
-      {/* Past section */}
       {past.length > 0 && (
         <div>
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
@@ -624,21 +635,163 @@ const InvitationsTab = ({ orgId, can }) => {
   );
 };
 
+// ─── Billing Tab ──────────────────────────────────────────────────────────────
+
+const BillingTab = () => (
+  <div className="space-y-6">
+    <div>
+      <h2 className="text-base font-semibold text-gray-900 mb-1">Billing & Plan</h2>
+      <p className="text-sm text-gray-500">Manage your subscription and payment details.</p>
+    </div>
+
+    {/* Current plan card */}
+    <div className="border border-gray-200 rounded-xl p-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg font-semibold text-gray-900">Free Plan</span>
+            <Badge color="green" label="Active" />
+          </div>
+          <p className="text-sm text-gray-500">Up to 5 members · 3 projects · Basic features</p>
+        </div>
+        <Button variant="primary" size="sm" disabled>
+          Upgrade — coming soon
+        </Button>
+      </div>
+    </div>
+
+    {/* Usage */}
+    <div className="border border-gray-200 rounded-xl p-6 space-y-4">
+      <h3 className="text-sm font-semibold text-gray-700">Usage</h3>
+      {[
+        { label: "Members", used: "—", limit: "5" },
+        { label: "Projects", used: "—", limit: "3" },
+        { label: "Storage", used: "—", limit: "1 GB" },
+      ].map(({ label, used, limit }) => (
+        <div key={label} className="flex items-center justify-between text-sm">
+          <span className="text-gray-600">{label}</span>
+          <span className="text-gray-400">{used} / {limit}</span>
+        </div>
+      ))}
+    </div>
+
+    {/* Payment method */}
+    <div className="border border-gray-200 rounded-xl p-6">
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">Payment method</h3>
+      <p className="text-sm text-gray-400">No payment method on file.</p>
+      <Button variant="secondary" size="sm" className="mt-3" disabled>
+        Add payment method — coming soon
+      </Button>
+    </div>
+  </div>
+);
+
+// ─── Danger Zone ──────────────────────────────────────────────────────────────
+
+const DangerZone = ({ orgId, orgName }) => {
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const { show: showToast } = useToast();
+  const { organizations } = useAppSelector((s) => s.auth);
+
+  const [showModal, setShowModal] = useState(false);
+  const [confirmName, setConfirmName] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (confirmName !== orgName) return;
+    setDeleting(true);
+    try {
+      await dispatch(deleteOrganization(orgId)).unwrap();
+      showToast("Organization deleted", "success");
+      // Navigate to next org or select-org if none left
+      const remaining = organizations.filter((o) => o.id !== orgId);
+      navigate(remaining.length > 0 ? "/" : "/select-org", { replace: true });
+    } catch (err) {
+      showToast(typeof err === "string" ? err : "Failed to delete organization", "error");
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="border border-red-200 rounded-xl p-6 bg-red-50">
+        <h2 className="text-base font-semibold text-red-700 mb-1">Danger Zone</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Permanently delete this organization and all its data. This action cannot be undone.
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowModal(true)}
+          className="border border-red-400 text-red-600 hover:bg-red-100"
+        >
+          Delete organization
+        </Button>
+      </div>
+
+      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setConfirmName(""); }} title="Delete organization">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            This will permanently delete <strong>{orgName}</strong> and all associated projects,
+            tasks, members, and settings. This action <strong>cannot be undone</strong>.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Type <span className="font-semibold text-gray-900">{orgName}</span> to confirm
+            </label>
+            <Input
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+              placeholder={orgName}
+              disabled={deleting}
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-1">
+            <Button variant="secondary" onClick={() => { setShowModal(false); setConfirmName(""); }} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={handleDelete}
+              loading={deleting}
+              disabled={confirmName !== orgName}
+              className="bg-red-600 text-white hover:bg-red-700 disabled:opacity-40"
+            >
+              Delete organization
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+};
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const OrgSettingsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentOrg } = useAppSelector((s) => s.auth);
-  const { can } = usePermissions();
+  const { can, isLoading } = usePermissions();
+
+  // Build tabs dynamically based on permissions
+  const tabs = [
+    "Members",
+    "Roles",
+    ...(can("invite_user") ? ["Invitations"] : []),
+    ...(can("manage_billing") ? ["Billing"] : []),
+  ];
 
   const rawTab = searchParams.get(TAB_PARAM);
-  const activeTab = TABS.includes(rawTab) ? rawTab : TABS[0];
+  const activeTab = tabs.includes(rawTab) ? rawTab : tabs[0];
 
   const setActiveTab = (tab) => {
     setSearchParams({ [TAB_PARAM]: tab }, { replace: true });
   };
 
-  if (!currentOrg) return null;
+  if (!currentOrg || isLoading) return (
+    <div className="flex justify-center py-16"><Spinner /></div>
+  );
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
@@ -649,7 +802,7 @@ const OrgSettingsPage = () => {
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
         <nav className="flex gap-6">
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -674,6 +827,16 @@ const OrgSettingsPage = () => {
       )}
       {activeTab === "Invitations" && (
         <InvitationsTab orgId={currentOrg.id} can={can} />
+      )}
+      {activeTab === "Billing" && (
+        <BillingTab />
+      )}
+
+      {/* Danger Zone — only for owners (delete_organization permission) */}
+      {can("delete_organization") && (
+        <div className="mt-12">
+          <DangerZone orgId={currentOrg.id} orgName={currentOrg.name} />
+        </div>
       )}
     </div>
   );

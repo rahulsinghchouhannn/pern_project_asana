@@ -77,6 +77,14 @@ const cancelInvitation = asyncHandler(async (req, res) => {
   res.status(200).json(successResponse(result));
 });
 
+const deleteOrg = asyncHandler(async (req, res) => {
+  const result = await organizationService.deleteOrganization(
+    req.params.orgId,
+    req.user.userId
+  );
+  res.status(200).json(successResponse(result));
+});
+
 module.exports = {
   createOrg,
   getUserOrgs,
@@ -89,4 +97,5 @@ module.exports = {
   getInvitations,
   resendInvitation,
   cancelInvitation,
+  deleteOrg,
 };

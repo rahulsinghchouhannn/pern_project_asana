@@ -89,6 +89,18 @@ export const switchOrganization = createAsyncThunk(
   }
 );
 
+export const deleteOrganization = createAsyncThunk(
+  "auth/deleteOrganization",
+  async (orgId, { rejectWithValue }) => {
+    try {
+      await organizationService.deleteOrganization(orgId);
+      return orgId;
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.error || "Failed to delete organization");
+    }
+  }
+);
+
 // ─── localStorage helpers ──────────────────────────────────────────────────────
 
 const persistAuthToStorage = ({ accessToken, refreshToken, user }) => {
@@ -300,6 +312,27 @@ const authSlice = createSlice({
         state.permissionsCache = {};
         if (action.payload) {
           localStorage.setItem("currentOrg", JSON.stringify(action.payload));
+        }
+      });
+
+    // ── delete org ──
+    builder
+      .addCase(deleteOrganization.fulfilled, (state, action) => {
+        const deletedOrgId = action.payload;
+        const remaining = state.organizations.filter((o) => o.id !== deletedOrgId);
+        state.organizations = remaining;
+        state.permissionsCache = {};
+        localStorage.setItem("organizations", JSON.stringify(remaining));
+
+        // Switch to another org if we deleted the current one
+        if (state.currentOrg?.id === deletedOrgId) {
+          const next = remaining[0] ?? null;
+          state.currentOrg = next;
+          if (next) {
+            localStorage.setItem("currentOrg", JSON.stringify(next));
+          } else {
+            localStorage.removeItem("currentOrg");
+          }
         }
       });
   },
