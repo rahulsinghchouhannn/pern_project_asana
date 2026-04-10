@@ -320,10 +320,25 @@ const authSlice = createSlice({
     // ── switch org ──
     builder
       .addCase(switchOrganization.fulfilled, (state, action) => {
-        state.currentOrg = action.payload;
+        const switchedOrg = action.payload;
+        const existingOrg = state.organizations.find((o) => o.id === switchedOrg?.id);
+
+        // Keep list + active org synchronized to avoid stale names in sidebar.
+        if (switchedOrg?.id) {
+          if (existingOrg) {
+            state.organizations = state.organizations.map((o) =>
+              o.id === switchedOrg.id ? { ...o, ...switchedOrg } : o
+            );
+          } else {
+            state.organizations = [...state.organizations, switchedOrg];
+          }
+          localStorage.setItem("organizations", JSON.stringify(state.organizations));
+        }
+
+        state.currentOrg = switchedOrg;
         state.permissionsCache = {};
-        if (action.payload) {
-          localStorage.setItem("currentOrg", JSON.stringify(action.payload));
+        if (switchedOrg) {
+          localStorage.setItem("currentOrg", JSON.stringify(switchedOrg));
         }
       });
 
