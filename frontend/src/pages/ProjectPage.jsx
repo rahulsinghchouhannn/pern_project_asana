@@ -14,6 +14,7 @@ import TimelineView from "@/components/task/views/TimelineView";
 import Spinner from "@/components/ui/Spinner";
 import taskService from "@/services/taskService";
 import sectionService from "@/services/sectionService";
+import customFieldService from "@/services/customFieldService";
 import CustomFieldsManager from "@/components/customFields/CustomFieldsManager";
 import socketService from "@/services/socketService";
 
@@ -142,9 +143,13 @@ const OverviewTab = ({ project, members, tasks }) => {
 
 // ─── Filter / Sort / Search toolbar ──────────────────────────────────────────
 
-const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
+const getCustomFilterInputType = (type) => {
+  if (type === "number" || type === "estimated_time" || type === "actual_time") return "number";
+  if (type === "date") return "date";
+  return "text";
+};
 
-const FilterPanel = ({ filters, onChange, statuses, projectMembers, onClose }) => (
+const FilterPanel = ({ filters, onChange, projectMembers, customFields = [], onClose }) => (
   <div className="absolute right-0 top-full mt-1 w-72 bg-white rounded-xl shadow-xl border border-gray-200 z-30 p-4">
     <div className="flex items-center justify-between mb-3">
       <span className="text-sm font-semibold text-gray-800">Filter</span>
@@ -153,34 +158,6 @@ const FilterPanel = ({ filters, onChange, statuses, projectMembers, onClose }) =
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
-    </div>
-
-    {/* Status */}
-    <div className="mb-3">
-      <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
-      <select
-        value={filters.statusId}
-        onChange={(e) => onChange({ ...filters, statusId: e.target.value })}
-        className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-      >
-        <option value="">All statuses</option>
-        {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-      </select>
-    </div>
-
-    {/* Priority */}
-    <div className="mb-3">
-      <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
-      <select
-        value={filters.priority}
-        onChange={(e) => onChange({ ...filters, priority: e.target.value })}
-        className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-      >
-        <option value="">All priorities</option>
-        {["urgent", "high", "medium", "low", "none"].map((p) => (
-          <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
-        ))}
-      </select>
     </div>
 
     {/* Assignee */}
@@ -215,8 +192,85 @@ const FilterPanel = ({ filters, onChange, statuses, projectMembers, onClose }) =
       </div>
     </div>
 
+    {/* Custom fields */}
+    {customFields.length > 0 && (
+      <div className="mb-1 pt-2 border-t border-gray-100">
+        <label className="block text-xs font-medium text-gray-500 mb-2">Custom fields</label>
+        <div className="space-y-2">
+          {customFields.map((field) => {
+            const options = field.options ?? field.fieldOptions ?? [];
+            const current = filters.customFieldFilters?.[field.id] ?? "";
+            return (
+              <div key={field.id}>
+                <label className="block text-xs text-gray-500 mb-1 truncate">{field.name}</label>
+                {field.type === "dropdown" ? (
+                  <select
+                    value={current}
+                    onChange={(e) =>
+                      onChange({
+                        ...filters,
+                        customFieldFilters: {
+                          ...(filters.customFieldFilters ?? {}),
+                          [field.id]: e.target.value,
+                        },
+                      })
+                    }
+                    className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">All</option>
+                    {options.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.value}
+                      </option>
+                    ))}
+                  </select>
+                ) : field.type === "user" ? (
+                  <select
+                    value={current}
+                    onChange={(e) =>
+                      onChange({
+                        ...filters,
+                        customFieldFilters: {
+                          ...(filters.customFieldFilters ?? {}),
+                          [field.id]: e.target.value,
+                        },
+                      })
+                    }
+                    className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">All</option>
+                    {projectMembers.map((m) => (
+                      <option key={m.userId} value={m.userId}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type={getCustomFilterInputType(field.type)}
+                    value={current}
+                    onChange={(e) =>
+                      onChange({
+                        ...filters,
+                        customFieldFilters: {
+                          ...(filters.customFieldFilters ?? {}),
+                          [field.id]: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder="Any"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    )}
+
     <button
-      onClick={() => onChange({ statusId: "", priority: "", assigneeId: "", dueDateFrom: "", dueDateTo: "" })}
+      onClick={() => onChange({ assigneeId: "", dueDateFrom: "", dueDateTo: "", customFieldFilters: {} })}
       className="mt-3 w-full text-xs text-gray-400 hover:text-indigo-600 transition-colors"
     >
       Clear filters
@@ -228,7 +282,6 @@ const SortPanel = ({ sort, onChange, onClose }) => {
   const options = [
     { value: "position", label: "Default order" },
     { value: "dueDate", label: "Due date" },
-    { value: "priority", label: "Priority" },
     { value: "createdAt", label: "Created date" },
     { value: "title", label: "Title" },
   ];
@@ -293,6 +346,9 @@ const getProjectTabs = (views) => {
   return ALL_TABS.filter((t) => viewSet.has(t.key));
 };
 
+const getTaskFieldValueById = (task, fieldId) =>
+  (task.customFieldValues ?? []).find((v) => v.customFieldId === fieldId);
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const ProjectPage = () => {
@@ -309,6 +365,7 @@ const ProjectPage = () => {
   // ── Task state ─────────────────────────────────────────────────────────────
   const [tasks, setTasks] = useState([]);
   const [tasksLoading, setTasksLoading] = useState(false);
+  const [customFields, setCustomFields] = useState([]);
 
   // ── Section state ───────────────────────────────────────────────────────────
   const [sections, setSections] = useState([]);
@@ -319,10 +376,9 @@ const ProjectPage = () => {
   const [showFilter, setShowFilter] = useState(false);
   const [showSort, setShowSort] = useState(false);
   const [filters, setFilters] = useState({
-    statusId: "", priority: "", assigneeId: "", dueDateFrom: "", dueDateTo: "",
+    assigneeId: "", dueDateFrom: "", dueDateTo: "", customFieldFilters: {},
   });
   const [sort, setSort] = useState({ field: "position", dir: "asc" });
-  const [groupBy, setGroupBy] = useState("status");
   const filterRef = useRef(null);
   const sortRef = useRef(null);
 
@@ -366,6 +422,14 @@ const ProjectPage = () => {
     loadTasks();
     loadSections();
   }, [loadTasks, loadSections]);
+
+  useEffect(() => {
+    if (!id || !token || !currentOrg?.id) return;
+    customFieldService
+      .getProjectFields(id)
+      .then((res) => setCustomFields(res.data.data ?? []))
+      .catch(console.error);
+  }, [id, token, currentOrg?.id, customFieldsVersion]);
 
   // Tracks task IDs created by this client so the socket echo can be ignored.
   const locallyCreatedIds = useRef(new Set());
@@ -554,8 +618,6 @@ const ProjectPage = () => {
       const q = search.toLowerCase();
       result = result.filter((t) => t.title.toLowerCase().includes(q));
     }
-    if (filters.statusId) result = result.filter((t) => t.statusId === filters.statusId);
-    if (filters.priority) result = result.filter((t) => t.priority === filters.priority);
     if (filters.assigneeId) {
       result = result.filter((t) => t.assignees?.some((a) => a.userId === filters.assigneeId));
     }
@@ -568,6 +630,32 @@ const ProjectPage = () => {
       to.setHours(23, 59, 59, 999);
       result = result.filter((t) => t.dueDate && new Date(t.dueDate) <= to);
     }
+    if (filters.customFieldFilters && Object.keys(filters.customFieldFilters).length > 0) {
+      result = result.filter((t) => {
+        return Object.entries(filters.customFieldFilters).every(([fieldId, rawFilter]) => {
+          if (rawFilter == null || String(rawFilter).trim() === "") return true;
+          const filterValue = String(rawFilter).trim().toLowerCase();
+          const taskValue = getTaskFieldValueById(t, fieldId);
+          if (!taskValue) return false;
+          const fieldDef = customFields.find((f) => f.id === fieldId);
+          const type = fieldDef?.type;
+          if (type === "dropdown") {
+            return String(taskValue.valueOption ?? "").toLowerCase() === filterValue;
+          }
+          if (type === "user") {
+            return String(taskValue.valueUserId ?? "").toLowerCase() === filterValue;
+          }
+          if (type === "date") {
+            const d = taskValue.valueDate ? new Date(taskValue.valueDate).toISOString().split("T")[0] : "";
+            return d === filterValue;
+          }
+          if (type === "number" || type === "estimated_time" || type === "actual_time") {
+            return Number(taskValue.valueNumber ?? NaN) === Number(rawFilter);
+          }
+          return String(taskValue.valueText ?? "").toLowerCase().includes(filterValue);
+        });
+      });
+    }
 
     // Sort
     result = [...result].sort((a, b) => {
@@ -578,9 +666,6 @@ const ProjectPage = () => {
           else if (!a.dueDate) cmp = 1;
           else if (!b.dueDate) cmp = -1;
           else cmp = new Date(a.dueDate) - new Date(b.dueDate);
-          break;
-        case "priority":
-          cmp = (PRIORITY_ORDER[a.priority] ?? 4) - (PRIORITY_ORDER[b.priority] ?? 4);
           break;
         case "createdAt":
           cmp = new Date(a.createdAt) - new Date(b.createdAt);
@@ -595,15 +680,14 @@ const ProjectPage = () => {
     });
 
     return result;
-  }, [tasks, search, filters, sort]);
+  }, [tasks, search, filters, sort, customFields]);
 
   const hasActiveFilters =
     search.trim() ||
-    filters.statusId ||
-    filters.priority ||
     filters.assigneeId ||
     filters.dueDateFrom ||
-    filters.dueDateTo;
+    filters.dueDateTo ||
+    Object.values(filters.customFieldFilters ?? {}).some((v) => String(v ?? "").trim() !== "");
 
   // ── Render tab ─────────────────────────────────────────────────────────────
   const statuses = currentProject?.statuses ?? [];
@@ -736,8 +820,8 @@ const ProjectPage = () => {
             <FilterPanel
               filters={filters}
               onChange={setFilters}
-              statuses={statuses}
               projectMembers={members ?? []}
+              customFields={customFields}
               onClose={() => setShowFilter(false)}
             />
           )}
@@ -765,21 +849,6 @@ const ProjectPage = () => {
             />
           )}
         </div>
-
-        {/* Group by (list view only) */}
-        {activeTab === "list" && (
-          <div className="relative">
-            <select
-              value={groupBy}
-              onChange={(e) => setGroupBy(e.target.value)}
-              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="status">Group: Status</option>
-              <option value="priority">Group: Priority</option>
-              <option value="assignee">Group: Assignee</option>
-            </select>
-          </div>
-        )}
 
         <span className="text-xs text-gray-400 ml-auto">
           {filteredTasks.length}{tasks.length !== filteredTasks.length ? `/${tasks.length}` : ""} tasks
