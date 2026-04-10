@@ -2,6 +2,8 @@ const { eq, and, inArray, count } = require("drizzle-orm");
 const { db } = require("../db");
 const { projects, projectMembers, projectStatuses, users, organizationMembers } = require("../db/schema");
 const activityService = require("./activityService");
+const { hasPermission } = require("./permissionService");
+const { PERMISSIONS } = require("../config/permissions");
 const logger = require("../config/logger");
 
 // ─── Default statuses seeded on project creation ─────────────────────────────
@@ -224,8 +226,21 @@ const completeProject = async (projectId, userId) => {
 };
 
 const deleteProject = async (projectId, userId) => {
+  const [project] = await db
+    .select({ id: projects.id, organizationId: projects.organizationId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+  throwIf(!project, "Project not found", 404);
+
   const role = await getMemberRole(projectId, userId);
-  throwIf(role !== "owner", "Only the project owner can delete this project");
+  const hasDeletePermission = await hasPermission(
+    userId,
+    project.organizationId,
+    PERMISSIONS.DELETE_PROJECT,
+    projectId
+  );
+  throwIf(role !== "owner" && !hasDeletePermission, "Insufficient permissions to delete this project", 403);
 
   await db.delete(projects).where(eq(projects.id, projectId));
   logger.info({ message: "Project deleted", projectId, userId });

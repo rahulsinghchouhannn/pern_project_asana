@@ -27,7 +27,7 @@ router.post("/", requirePermission(PERMISSIONS.CREATE_PROJECT), validateRequest(
 router.get("/", projectController.list);
 router.get("/:id", projectController.getById);
 router.put("/:id", requirePermission(PERMISSIONS.MANAGE_PROJECT_SETTINGS), validateRequest(updateProjectSchema), projectController.update);
-router.delete("/:id", requirePermission(PERMISSIONS.DELETE_PROJECT), projectController.deleteProject);
+router.delete("/:id", projectController.deleteProject);
 router.post("/:id/archive", requirePermission(PERMISSIONS.ARCHIVE_PROJECT), projectController.archive);
 router.post("/:id/complete", projectController.complete);
 
