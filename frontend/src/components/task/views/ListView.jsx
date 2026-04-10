@@ -193,9 +193,10 @@ const ListView = ({
         const fields = res.data.data ?? [];
         setCustomFields(fields);
         setVisibleFieldIds((prev) => {
-          const existing = new Set(prev);
-          const added = fields.filter((f) => !existing.has(f.id)).map((f) => f.id);
-          return added.length > 0 ? [...prev, ...added] : prev;
+          const currentIds = new Set(fields.map((f) => f.id));
+          const kept = prev.filter((id) => currentIds.has(id));
+          const added = fields.filter((f) => !prev.includes(f.id)).map((f) => f.id);
+          return added.length > 0 ? [...kept, ...added] : kept;
         });
       })
       .catch(() => {});
@@ -816,23 +817,24 @@ const ListView = ({
             {/* Sticky header row */}
             <thead className="sticky top-0 bg-white z-10">
               <tr className="border-b border-gray-200">
-                <th className="text-left text-xs font-medium text-gray-500 py-2 pl-10 pr-2 w-125 border-r border-gray-200">
+                <th className="text-left text-xs font-medium text-gray-500 py-2 pl-10 pr-2 w-130 border-r border-gray-200">
                   Name
                 </th>
-                <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-40 border-r border-gray-200">
+                <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-45 border-r border-gray-200">
                   Assignee
                 </th>
-                <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-27.5 border-r border-gray-200">
+                <th className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-32.5 border-r border-gray-200">
                   Due date
                 </th>
                 {visibleFields.map((field) => (
                   <th
                     key={field.id}
-                    className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-28 whitespace-nowrap border-r border-gray-200"
+                    title={field.name}
+                    className="text-left text-xs font-medium text-gray-500 py-2 px-3 w-33 overflow-hidden border-r border-gray-200"
                   >
-                    <span className="flex items-center gap-1">
-                      <span className="text-gray-400">{FIELD_TYPE_ICONS[field.type]}</span>
-                      {field.name}
+                    <span className="flex items-center gap-1 overflow-hidden">
+                      <span className="text-gray-400 shrink-0">{FIELD_TYPE_ICONS[field.type]}</span>
+                      <span className="truncate pr-2">{field.name}</span>
                     </span>
                   </th>
                 ))}
