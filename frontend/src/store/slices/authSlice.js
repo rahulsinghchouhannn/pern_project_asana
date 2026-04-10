@@ -89,6 +89,18 @@ export const switchOrganization = createAsyncThunk(
   }
 );
 
+export const updateOrganization = createAsyncThunk(
+  "auth/updateOrganization",
+  async ({ orgId, data }, { rejectWithValue }) => {
+    try {
+      const response = await organizationService.updateOrganization(orgId, data);
+      return { orgId, org: response.data.data };
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.error || "Failed to update organization");
+    }
+  }
+);
+
 export const deleteOrganization = createAsyncThunk(
   "auth/deleteOrganization",
   async (orgId, { rejectWithValue }) => {
@@ -314,6 +326,19 @@ const authSlice = createSlice({
           localStorage.setItem("currentOrg", JSON.stringify(action.payload));
         }
       });
+
+    // ── update org ──
+    builder.addCase(updateOrganization.fulfilled, (state, action) => {
+      const { orgId, org } = action.payload;
+      state.organizations = state.organizations.map((o) =>
+        o.id === orgId ? { ...o, name: org.name } : o
+      );
+      localStorage.setItem("organizations", JSON.stringify(state.organizations));
+      if (state.currentOrg?.id === orgId) {
+        state.currentOrg = { ...state.currentOrg, name: org.name };
+        localStorage.setItem("currentOrg", JSON.stringify(state.currentOrg));
+      }
+    });
 
     // ── delete org ──
     builder

@@ -433,6 +433,19 @@ const getOrgMembers = async (orgId) => {
   return rows;
 };
 
+const updateOrganization = async (orgId, { name }) => {
+  const trimmed = name?.trim();
+  if (!trimmed) throw new Error("Workspace name is required");
+
+  const [updated] = await db
+    .update(organizations)
+    .set({ name: trimmed })
+    .where(eq(organizations.id, orgId))
+    .returning();
+
+  return updated;
+};
+
 const deleteOrganization = async (orgId, requestingUserId) => {
   // Verify requester is the owner
   const [ownerRole] = await db
@@ -559,5 +572,6 @@ module.exports = {
   rejectInvitation,
   getOrgMembers,
   removeMember,
+  updateOrganization,
   deleteOrganization,
 };

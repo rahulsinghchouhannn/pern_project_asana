@@ -45,6 +45,9 @@ const getOrgRoles = async (orgId) =>
 const updateMemberRole = async (orgId, userId, roleId) =>
   api.put(`/organizations/${orgId}/members/${userId}/role`, { roleId });
 
+const updateOrganization = async (orgId, data) =>
+  api.patch(`/organizations/${orgId}`, data, { headers: { "x-org-id": orgId } });
+
 const deleteOrganization = async (orgId) =>
   api.delete(`/organizations/${orgId}`);
 
@@ -62,5 +65,6 @@ export default {
   cancelInvitation,
   getOrgRoles,
   updateMemberRole,
+  updateOrganization,
   deleteOrganization,
 };

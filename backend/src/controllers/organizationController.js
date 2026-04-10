@@ -77,6 +77,14 @@ const cancelInvitation = asyncHandler(async (req, res) => {
   res.status(200).json(successResponse(result));
 });
 
+const updateOrg = asyncHandler(async (req, res) => {
+  const org = await organizationService.updateOrganization(
+    req.params.orgId,
+    req.body
+  );
+  res.status(200).json(successResponse(org));
+});
+
 const deleteOrg = asyncHandler(async (req, res) => {
   const result = await organizationService.deleteOrganization(
     req.params.orgId,
@@ -89,6 +97,7 @@ module.exports = {
   createOrg,
   getUserOrgs,
   switchOrg,
+  updateOrg,
   inviteUser,
   acceptInvite,
   rejectInvite,

@@ -688,84 +688,84 @@ const BillingTab = () => (
 
 // ─── Danger Zone ──────────────────────────────────────────────────────────────
 
-const DangerZone = ({ orgId, orgName }) => {
-  const dispatch = useAppDispatch();
-  const navigate = useNavigate();
-  const { show: showToast } = useToast();
-  const { organizations } = useAppSelector((s) => s.auth);
+// const DangerZone = ({ orgId, orgName }) => {
+//   const dispatch = useAppDispatch();
+//   const navigate = useNavigate();
+//   const { show: showToast } = useToast();
+//   const { organizations } = useAppSelector((s) => s.auth);
 
-  const [showModal, setShowModal] = useState(false);
-  const [confirmName, setConfirmName] = useState("");
-  const [deleting, setDeleting] = useState(false);
+//   const [showModal, setShowModal] = useState(false);
+//   const [confirmName, setConfirmName] = useState("");
+//   const [deleting, setDeleting] = useState(false);
 
-  const handleDelete = async () => {
-    if (confirmName !== orgName) return;
-    setDeleting(true);
-    try {
-      await dispatch(deleteOrganization(orgId)).unwrap();
-      showToast("Organization deleted", "success");
-      // Navigate to next org or select-org if none left
-      const remaining = organizations.filter((o) => o.id !== orgId);
-      navigate(remaining.length > 0 ? "/" : "/select-org", { replace: true });
-    } catch (err) {
-      showToast(typeof err === "string" ? err : "Failed to delete organization", "error");
-      setDeleting(false);
-    }
-  };
+//   const handleDelete = async () => {
+//     if (confirmName !== orgName) return;
+//     setDeleting(true);
+//     try {
+//       await dispatch(deleteOrganization(orgId)).unwrap();
+//       showToast("Organization deleted", "success");
+//       // Navigate to next org or select-org if none left
+//       const remaining = organizations.filter((o) => o.id !== orgId);
+//       navigate(remaining.length > 0 ? "/" : "/select-org", { replace: true });
+//     } catch (err) {
+//       showToast(typeof err === "string" ? err : "Failed to delete organization", "error");
+//       setDeleting(false);
+//     }
+//   };
 
-  return (
-    <>
-      <div className="border border-red-200 rounded-xl p-6 bg-red-50">
-        <h2 className="text-base font-semibold text-red-700 mb-1">Danger Zone</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Permanently delete this organization and all its data. This action cannot be undone.
-        </p>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowModal(true)}
-          className="border border-red-400 text-red-600 hover:bg-red-100"
-        >
-          Delete organization
-        </Button>
-      </div>
+//   return (
+//     <>
+//       <div className="border border-red-200 rounded-xl p-6 bg-red-50">
+//         <h2 className="text-base font-semibold text-red-700 mb-1">Danger Zone</h2>
+//         <p className="text-sm text-gray-600 mb-4">
+//           Permanently delete this organization and all its data. This action cannot be undone.
+//         </p>
+//         <Button
+//           variant="ghost"
+//           size="sm"
+//           onClick={() => setShowModal(true)}
+//           className="border border-red-400 text-red-600 hover:bg-red-100"
+//         >
+//           Delete organization
+//         </Button>
+//       </div>
 
-      <Modal isOpen={showModal} onClose={() => { setShowModal(false); setConfirmName(""); }} title="Delete organization">
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">
-            This will permanently delete <strong>{orgName}</strong> and all associated projects,
-            tasks, members, and settings. This action <strong>cannot be undone</strong>.
-          </p>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Type <span className="font-semibold text-gray-900">{orgName}</span> to confirm
-            </label>
-            <Input
-              value={confirmName}
-              onChange={(e) => setConfirmName(e.target.value)}
-              placeholder={orgName}
-              disabled={deleting}
-            />
-          </div>
-          <div className="flex justify-end gap-3 pt-1">
-            <Button variant="secondary" onClick={() => { setShowModal(false); setConfirmName(""); }} disabled={deleting}>
-              Cancel
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={handleDelete}
-              loading={deleting}
-              disabled={confirmName !== orgName}
-              className="bg-red-600 text-white hover:bg-red-700 disabled:opacity-40"
-            >
-              Delete organization
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    </>
-  );
-};
+//       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setConfirmName(""); }} title="Delete organization">
+//         <div className="space-y-4">
+//           <p className="text-sm text-gray-600">
+//             This will permanently delete <strong>{orgName}</strong> and all associated projects,
+//             tasks, members, and settings. This action <strong>cannot be undone</strong>.
+//           </p>
+//           <div>
+//             <label className="block text-sm font-medium text-gray-700 mb-1">
+//               Type <span className="font-semibold text-gray-900">{orgName}</span> to confirm
+//             </label>
+//             <Input
+//               value={confirmName}
+//               onChange={(e) => setConfirmName(e.target.value)}
+//               placeholder={orgName}
+//               disabled={deleting}
+//             />
+//           </div>
+//           <div className="flex justify-end gap-3 pt-1">
+//             <Button variant="secondary" onClick={() => { setShowModal(false); setConfirmName(""); }} disabled={deleting}>
+//               Cancel
+//             </Button>
+//             <Button
+//               variant="ghost"
+//               onClick={handleDelete}
+//               loading={deleting}
+//               disabled={confirmName !== orgName}
+//               className="bg-red-600 text-white hover:bg-red-700 disabled:opacity-40"
+//             >
+//               Delete organization
+//             </Button>
+//           </div>
+//         </div>
+//       </Modal>
+//     </>
+//   );
+// };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -833,11 +833,11 @@ const OrgSettingsPage = () => {
       )}
 
       {/* Danger Zone — only for owners (delete_organization permission) */}
-      {can("delete_organization") && (
+      {/* {can("delete_organization") && (
         <div className="mt-12">
           <DangerZone orgId={currentOrg.id} orgName={currentOrg.name} />
         </div>
-      )}
+      )} */}
     </div>
   );
 };

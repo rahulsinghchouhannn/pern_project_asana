@@ -90,6 +90,15 @@ router.delete(
   organizationController.cancelInvitation
 );
 
+// PATCH /api/organizations/:orgId — rename organization
+router.patch(
+  "/:orgId",
+  authMiddleware,
+  orgMiddleware,
+  requirePermission(PERMISSIONS.MANAGE_ROLES),
+  organizationController.updateOrg
+);
+
 // DELETE /api/organizations/:orgId — delete organization (owner only)
 router.delete(
   "/:orgId",

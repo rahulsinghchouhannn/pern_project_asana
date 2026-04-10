@@ -4,6 +4,8 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { fetchOrgProjects, updateProject, deleteProject } from "@/store/slices/projectSlice";
 import {
   switchOrganization,
+  updateOrganization,
+  deleteOrganization,
   setOrganizations,
   setCurrentOrg,
 } from "@/store/slices/authSlice";
@@ -15,6 +17,8 @@ import ShareProjectModal from "@/components/project/ShareProjectModal";
 import ProjectContextMenu from "@/components/project/ProjectContextMenu";
 import ArchiveProjectDialog from "@/components/project/ArchiveProjectDialog";
 import DeleteProjectDialog from "@/components/project/DeleteProjectDialog";
+import WorkspaceContextMenu from "@/components/workspace/WorkspaceContextMenu";
+import DeleteWorkspaceDialog from "@/components/workspace/DeleteWorkspaceDialog";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -196,14 +200,23 @@ const Sidebar = () => {
   const [isSwitching, setIsSwitching] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // ── Context menu state ──────────────────────────────────────────────────────
+  // ── Project context menu state ──────────────────────────────────────────────
   const [menuState, setMenuState] = useState(null); // { project, x, y }
   const [dialog, setDialog] = useState(null);        // { type: 'share'|'archive'|'delete', project }
 
-  // ── Inline rename state ─────────────────────────────────────────────────────
+  // ── Project inline rename state ─────────────────────────────────────────────
   const [renaming, setRenaming] = useState(null);    // { id, value, original }
   const renamingRef = useRef(null);
   const renameTimerRef = useRef(null);
+
+  // ── Workspace context menu state ────────────────────────────────────────────
+  const [wsMenuState, setWsMenuState] = useState(null); // { org, x, y }
+  const [wsDialog, setWsDialog] = useState(null);        // { type: 'delete', org }
+
+  // ── Workspace inline rename state ───────────────────────────────────────────
+  const [wsRenaming, setWsRenaming] = useState(null);   // { id, value, original }
+  const wsRenamingRef = useRef(null);
+  const wsRenameTimerRef = useRef(null);
 
   useEffect(() => {
     if (!token || !currentOrg?.id) return;
@@ -315,6 +328,95 @@ const Sidebar = () => {
       if (wasViewing) navigate("/");
     } catch {
       showToast("Failed to delete project", "error");
+    }
+  };
+
+  // ── Workspace context menu handlers ────────────────────────────────────────
+
+  const handleWsContextMenu = (e, org) => {
+    e.preventDefault();
+    setWsMenuState({ org, x: e.clientX, y: e.clientY });
+  };
+
+  const handleWsThreeDotClick = (e, org) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setWsMenuState({ org, x: rect.right + 4, y: rect.top });
+  };
+
+  const handleWsRename = (org) => {
+    const r = { id: org.id, value: org.name, original: org.name };
+    wsRenamingRef.current = r;
+    setWsRenaming(r);
+  };
+
+  const handleWsSettings = async (org) => {
+    try {
+      if (org.id !== currentOrg?.id) {
+        await dispatch(switchOrganization(org.id)).unwrap();
+      }
+      navigate("/settings/organization");
+    } catch {
+      showToast("Failed to switch workspace", "error");
+    }
+  };
+
+  const handleWsDelete = (org) => {
+    setWsDialog({ type: "delete", org });
+  };
+
+  // ── Workspace inline rename handlers ────────────────────────────────────────
+
+  const handleWsRenameInput = (value) => {
+    const next = { ...wsRenamingRef.current, value };
+    wsRenamingRef.current = next;
+    setWsRenaming(next);
+    clearTimeout(wsRenameTimerRef.current);
+    wsRenameTimerRef.current = setTimeout(() => {
+      const r = wsRenamingRef.current;
+      if (r && r.value.trim()) {
+        dispatch(updateOrganization({ orgId: r.id, data: { name: r.value.trim() } }));
+      }
+    }, 600);
+  };
+
+  const handleWsRenameCommit = () => {
+    clearTimeout(wsRenameTimerRef.current);
+    const r = wsRenamingRef.current;
+    if (r) {
+      const trimmed = r.value.trim();
+      if (trimmed && trimmed !== r.original) {
+        dispatch(updateOrganization({ orgId: r.id, data: { name: trimmed } }));
+      } else if (!trimmed) {
+        dispatch(updateOrganization({ orgId: r.id, data: { name: r.original } }));
+      }
+    }
+    wsRenamingRef.current = null;
+    setWsRenaming(null);
+  };
+
+  const handleWsRenameCancel = () => {
+    clearTimeout(wsRenameTimerRef.current);
+    const r = wsRenamingRef.current;
+    if (r && r.value !== r.original) {
+      dispatch(updateOrganization({ orgId: r.id, data: { name: r.original } }));
+    }
+    wsRenamingRef.current = null;
+    setWsRenaming(null);
+  };
+
+  // ── Workspace delete confirm ────────────────────────────────────────────────
+
+  const handleConfirmWsDelete = async () => {
+    const org = wsDialog.org;
+    const wasActive = currentOrg?.id === org.id;
+    setWsDialog(null);
+    try {
+      await dispatch(deleteOrganization(org.id)).unwrap();
+      if (wasActive) navigate("/");
+    } catch {
+      showToast("Failed to delete workspace", "error");
     }
   };
 
@@ -490,34 +592,80 @@ const Sidebar = () => {
           <div className="overflow-y-auto scrollbar-sidebar" style={{ maxHeight: "140px" }}>
             {sortedOrgs.map((org) => {
               const isActive = org.id === currentOrg?.id;
+              const isWsRenaming = wsRenaming?.id === org.id;
+              const canRename = org.role === "owner" || org.role === "admin";
+              const canDelete = org.role === "owner";
+              const showMenu = canRename || canDelete;
               return (
-                <button
+                <div
                   key={org.id}
-                  onClick={() => handleSwitchOrg(org.id)}
-                  disabled={isSwitching}
-                  className={`flex items-center justify-between w-full px-3 rounded text-[13px] text-left transition-colors ${
-                    isActive
-                      ? "bg-[rgba(255,255,255,0.12)] text-[#F1F1F1]"
-                      : "text-[#C0C0C0] hover:bg-[rgba(255,255,255,0.06)] hover:text-[#F1F1F1]"
-                  }`}
-                  style={{ paddingTop: "5px", paddingBottom: "5px", borderRadius: "4px" }}
+                  className="relative group"
+                  onContextMenu={(e) => showMenu && handleWsContextMenu(e, org)}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                  {isWsRenaming ? (
                     <div
-                      className="w-4 h-4 rounded flex items-center justify-center text-white shrink-0"
-                      style={{ fontSize: "9px", fontWeight: 700, backgroundColor: orgColor(org.name) }}
+                      className="flex items-center gap-2 px-3"
+                      style={{ paddingTop: "5px", paddingBottom: "5px", borderRadius: "4px", backgroundColor: "rgba(255,255,255,0.12)" }}
                     >
-                      {orgInitial(org.name)}
+                      <div
+                        className="w-4 h-4 rounded flex items-center justify-center text-white shrink-0"
+                        style={{ fontSize: "9px", fontWeight: 700, backgroundColor: orgColor(org.name) }}
+                      >
+                        {orgInitial(org.name)}
+                      </div>
+                      <input
+                        autoFocus
+                        value={wsRenaming.value}
+                        onChange={(e) => handleWsRenameInput(e.target.value)}
+                        onBlur={handleWsRenameCommit}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleWsRenameCommit();
+                          if (e.key === "Escape") handleWsRenameCancel();
+                        }}
+                        className="flex-1 min-w-0 bg-transparent text-[13px] text-[#F1F1F1] outline-none border-b border-indigo-400 pb-px"
+                        style={{ caretColor: "#fff" }}
+                      />
                     </div>
-                    <span className="truncate">{org.name}</span>
-                  </div>
-                  <span
-                    className="shrink-0 ml-2 capitalize"
-                    style={{ fontSize: "10px", color: "rgba(255,255,255,0.35)" }}
-                  >
-                    {org.role}
-                  </span>
-                </button>
+                  ) : (
+                    <div className="relative flex items-center">
+                      <button
+                        onClick={() => handleSwitchOrg(org.id)}
+                        disabled={isSwitching}
+                        className={`flex items-center w-full px-3 text-[13px] text-left transition-colors ${
+                          isActive
+                            ? "bg-[rgba(255,255,255,0.12)] text-[#F1F1F1]"
+                            : "text-[#C0C0C0] hover:bg-[rgba(255,255,255,0.06)] hover:text-[#F1F1F1]"
+                        }`}
+                        style={{ paddingTop: "5px", paddingBottom: "5px", borderRadius: "4px", paddingRight: showMenu ? "28px" : undefined }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div
+                            className="w-4 h-4 rounded flex items-center justify-center text-white shrink-0"
+                            style={{ fontSize: "9px", fontWeight: 700, backgroundColor: orgColor(org.name) }}
+                          >
+                            {orgInitial(org.name)}
+                          </div>
+                          <span className="truncate">{org.name}</span>
+                        </div>
+                        <span
+                          className={`shrink-0 ml-2 capitalize ${showMenu ? "group-hover:hidden" : ""}`}
+                          style={{ fontSize: "10px", color: "rgba(255,255,255,0.35)" }}
+                        >
+                          {org.role}
+                        </span>
+                      </button>
+                      {showMenu && (
+                        <button
+                          onClick={(e) => handleWsThreeDotClick(e, org)}
+                          className="absolute right-1 opacity-0 group-hover:opacity-100 p-0.5 rounded text-white/50 hover:text-white/90 hover:bg-white/10 transition-all shrink-0"
+                          aria-label="Workspace options"
+                        >
+                          <DotsIcon />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -587,6 +735,26 @@ const Sidebar = () => {
           project={dialog.project}
           onConfirm={handleConfirmDelete}
           onCancel={() => setDialog(null)}
+        />
+      )}
+
+      {wsMenuState && (
+        <WorkspaceContextMenu
+          position={{ x: wsMenuState.x, y: wsMenuState.y }}
+          onClose={() => setWsMenuState(null)}
+          onRename={() => { handleWsRename(wsMenuState.org); setWsMenuState(null); }}
+          onSettings={() => handleWsSettings(wsMenuState.org)}
+          onDelete={() => handleWsDelete(wsMenuState.org)}
+          canRename={wsMenuState.org.role === "owner" || wsMenuState.org.role === "admin"}
+          canDelete={wsMenuState.org.role === "owner"}
+        />
+      )}
+
+      {wsDialog?.type === "delete" && (
+        <DeleteWorkspaceDialog
+          org={wsDialog.org}
+          onConfirm={handleConfirmWsDelete}
+          onCancel={() => setWsDialog(null)}
         />
       )}
     </aside>
