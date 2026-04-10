@@ -7,7 +7,7 @@ const activityLogs = pgTable("activity_logs", {
   organizationId: uuid("organization_id")
     .notNull()
     .references(() => organizations.id),
-  projectId: uuid("project_id").references(() => require("./projects").projects.id),
+  projectId: uuid("project_id").references(() => require("./projects").projects.id, { onDelete: "cascade" }),
   taskId: uuid("task_id").references(() => require("./tasks").tasks.id, { onDelete: "set null" }),
   actorId: uuid("actor_id")
     .notNull()

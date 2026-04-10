@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchOrgProjects } from "@/store/slices/projectSlice";
+import { fetchOrgProjects, updateProject, deleteProject } from "@/store/slices/projectSlice";
 import {
   switchOrganization,
   setOrganizations,
@@ -9,7 +9,12 @@ import {
 } from "@/store/slices/authSlice";
 import usePermissions from "@/hooks/usePermissions";
 import organizationService from "@/services/organizationService";
+import projectService from "@/services/projectService";
 import { useToast } from "@/components/ui/Toast";
+import ShareProjectModal from "@/components/project/ShareProjectModal";
+import ProjectContextMenu from "@/components/project/ProjectContextMenu";
+import ArchiveProjectDialog from "@/components/project/ArchiveProjectDialog";
+import DeleteProjectDialog from "@/components/project/DeleteProjectDialog";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -57,6 +62,11 @@ const SettingsIcon = () => (
 const ChevronRightIcon = () => (
   <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+  </svg>
+);
+const DotsIcon = () => (
+  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+    <path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zm6 0a2 2 0 11-4 0 2 2 0 014 0zm6 0a2 2 0 11-4 0 2 2 0 014 0z" />
   </svg>
 );
 
@@ -178,24 +188,143 @@ const CreateWorkspaceModal = ({ onClose, onCreated }) => {
 const Sidebar = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const { show: showToast } = useToast();
   const { projects } = useAppSelector((s) => s.projects);
   const { token, currentOrg, organizations } = useAppSelector((s) => s.auth);
-  const { can } = usePermissions();
+  const { can, denyToast } = usePermissions();
   const [isSwitching, setIsSwitching] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // ── Context menu state ──────────────────────────────────────────────────────
+  const [menuState, setMenuState] = useState(null); // { project, x, y }
+  const [dialog, setDialog] = useState(null);        // { type: 'share'|'archive'|'delete', project }
+
+  // ── Inline rename state ─────────────────────────────────────────────────────
+  const [renaming, setRenaming] = useState(null);    // { id, value, original }
+  const renamingRef = useRef(null);
+  const renameTimerRef = useRef(null);
 
   useEffect(() => {
     if (!token || !currentOrg?.id) return;
     dispatch(fetchOrgProjects());
   }, [dispatch, token, currentOrg?.id]);
 
+  // ── Context menu handlers ───────────────────────────────────────────────────
+
+  const openMenu = (project, x, y) => {
+    setMenuState({ project, x, y });
+  };
+
+  const handleContextMenu = (e, project) => {
+    e.preventDefault();
+    openMenu(project, e.clientX, e.clientY);
+  };
+
+  const handleThreeDotClick = (e, project) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    openMenu(project, rect.right + 4, rect.top);
+  };
+
+  // ── Menu action handlers (permission-gated) ─────────────────────────────────
+
+  const handleShare = (project) => {
+    if (!can("manage_project_members")) { denyToast(); return; }
+    setDialog({ type: "share", project });
+  };
+
+  const handleRename = (project) => {
+    if (!can("manage_project_settings")) { denyToast(); return; }
+    const r = { id: project.id, value: project.name, original: project.name };
+    renamingRef.current = r;
+    setRenaming(r);
+  };
+
+  const handleArchive = (project) => {
+    if (!can("archive_project")) { denyToast(); return; }
+    setDialog({ type: "archive", project });
+  };
+
+  const handleDelete = (project) => {
+    if (!can("delete_project")) { denyToast(); return; }
+    setDialog({ type: "delete", project });
+  };
+
+  // ── Inline rename handlers ──────────────────────────────────────────────────
+
+  const handleRenameInput = (value) => {
+    const next = { ...renamingRef.current, value };
+    renamingRef.current = next;
+    setRenaming(next);
+    clearTimeout(renameTimerRef.current);
+    renameTimerRef.current = setTimeout(() => {
+      const r = renamingRef.current;
+      if (r && r.value.trim()) {
+        dispatch(updateProject({ projectId: r.id, data: { name: r.value.trim() } }));
+      }
+    }, 600);
+  };
+
+  const handleRenameCommit = () => {
+    clearTimeout(renameTimerRef.current);
+    const r = renamingRef.current;
+    if (r) {
+      const trimmed = r.value.trim();
+      if (trimmed && trimmed !== r.original) {
+        dispatch(updateProject({ projectId: r.id, data: { name: trimmed } }));
+      } else if (!trimmed) {
+        // revert to original if cleared
+        dispatch(updateProject({ projectId: r.id, data: { name: r.original } }));
+      }
+    }
+    renamingRef.current = null;
+    setRenaming(null);
+  };
+
+  const handleRenameCancel = () => {
+    clearTimeout(renameTimerRef.current);
+    const r = renamingRef.current;
+    if (r && r.value !== r.original) {
+      dispatch(updateProject({ projectId: r.id, data: { name: r.original } }));
+    }
+    renamingRef.current = null;
+    setRenaming(null);
+  };
+
+  // ── Dialog confirm handlers ─────────────────────────────────────────────────
+
+  const handleConfirmArchive = async () => {
+    const project = dialog.project;
+    setDialog(null);
+    try {
+      await projectService.archiveProject(project.id);
+      dispatch(updateProject({ projectId: project.id, data: { isArchived: true } }));
+    } catch {
+      showToast("Failed to archive project", "error");
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    const project = dialog.project;
+    setDialog(null);
+    const wasViewing = location.pathname.startsWith(`/projects/${project.id}`);
+    try {
+      await dispatch(deleteProject(project.id)).unwrap();
+      if (wasViewing) navigate("/");
+    } catch {
+      showToast("Failed to delete project", "error");
+    }
+  };
+
+  // ── Workspace helpers ───────────────────────────────────────────────────────
+
   const handleSwitchOrg = async (orgId) => {
     if (orgId === currentOrg?.id || isSwitching) return;
     setIsSwitching(true);
     try {
       await dispatch(switchOrganization(orgId)).unwrap();
-      // fetchOrgProjects fires via the useEffect above when currentOrg.id changes
       navigate("/");
     } catch {
       showToast("Failed to switch workspace", "error");
@@ -206,7 +335,6 @@ const Sidebar = () => {
 
   const handleWorkspaceCreated = (newOrg) => {
     setShowCreateModal(false);
-    // Add to orgs list with owner role, switch to it
     const newOrgWithRole = { ...newOrg, role: "owner" };
     const updated = [...organizations, newOrgWithRole];
     dispatch(setOrganizations(updated));
@@ -214,7 +342,6 @@ const Sidebar = () => {
     navigate("/");
   };
 
-  // Sort: owned workspaces first, then joined alphabetically
   const sortedOrgs = [...organizations].sort((a, b) => {
     if (a.role === "owner" && b.role !== "owner") return -1;
     if (b.role === "owner" && a.role !== "owner") return 1;
@@ -223,13 +350,14 @@ const Sidebar = () => {
 
   const orgInitial = (name) => name?.[0]?.toUpperCase() ?? "W";
 
-  // Colour based on name hash for workspace avatar
   const AVATAR_BG = ["#EC4899", "#6366F1", "#8B5CF6", "#F97316", "#22C55E", "#3B82F6", "#EF4444"];
   const orgColor = (name = "") => {
     let h = 0;
     for (const c of name) h += c.charCodeAt(0);
     return AVATAR_BG[h % AVATAR_BG.length];
   };
+
+  const visibleProjects = projects.filter((p) => !p.isArchived);
 
   return (
     <aside
@@ -262,7 +390,7 @@ const Sidebar = () => {
           <NavItem to="/goals" icon={<GoalIcon />} label="Goals" />
         </div>
 
-        {/* Projects section — grows to fill space, scrolls independently */}
+        {/* Projects section */}
         <div className="flex flex-col flex-1 overflow-hidden min-h-0">
           <div className="flex items-center justify-between px-3 pb-1 shrink-0" style={{ marginTop: "8px" }}>
             <span className="font-semibold uppercase tracking-wider" style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>
@@ -280,32 +408,83 @@ const Sidebar = () => {
               </button>
             )}
           </div>
+
           <div className="flex-1 overflow-y-auto flex flex-col gap-0.5 scrollbar-sidebar">
-            {projects.length === 0 ? (
+            {visibleProjects.length === 0 ? (
               <p className="px-3 text-xs text-gray-600">No projects yet</p>
             ) : (
-              projects.map((p) => (
-                <NavLink
-                  key={p.id}
-                  to={`/projects/${p.id}`}
-                  className={({ isActive }) =>
-                    `flex items-center gap-2.5 px-3 transition-colors text-[14px] text-[#F1F1F1] ${
-                      isActive
-                        ? "bg-[rgba(255,255,255,0.1)]"
-                        : "hover:bg-[rgba(255,255,255,0.08)]"
-                    }`
-                  }
-                  style={{ paddingTop: "6px", paddingBottom: "6px", borderRadius: "4px" }}
-                >
-                  <ProjectDot color={p.color} />
-                  <span className="truncate">{p.name}</span>
-                </NavLink>
-              ))
+              visibleProjects.map((p) => {
+                const isRenaming = renaming?.id === p.id;
+                return (
+                  <div
+                    key={p.id}
+                    className="relative group"
+                    onContextMenu={(e) => handleContextMenu(e, p)}
+                  >
+                    {isRenaming ? (
+                      // ── Inline rename input ──────────────────────────────
+                      <div
+                        className="flex items-center gap-2.5 px-3"
+                        style={{
+                          paddingTop: "6px",
+                          paddingBottom: "6px",
+                          borderRadius: "4px",
+                          backgroundColor: "rgba(255,255,255,0.1)",
+                        }}
+                      >
+                        <ProjectDot color={p.color} />
+                        <input
+                          autoFocus
+                          value={renaming.value}
+                          onChange={(e) => handleRenameInput(e.target.value)}
+                          onBlur={handleRenameCommit}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleRenameCommit();
+                            if (e.key === "Escape") handleRenameCancel();
+                          }}
+                          className="flex-1 min-w-0 bg-transparent text-[14px] text-[#F1F1F1] outline-none border-b border-indigo-400 pb-px"
+                          style={{ caretColor: "#fff" }}
+                        />
+                      </div>
+                    ) : (
+                      // ── Normal project row ───────────────────────────────
+                      <div className="relative flex items-center">
+                        <NavLink
+                          to={`/projects/${p.id}`}
+                          className={({ isActive }) =>
+                            `flex items-center gap-2.5 px-3 transition-colors text-[14px] text-[#F1F1F1] flex-1 min-w-0 ${
+                              isActive
+                                ? "bg-[rgba(255,255,255,0.1)]"
+                                : "hover:bg-[rgba(255,255,255,0.08)]"
+                            }`
+                          }
+                          style={{
+                            paddingTop: "6px",
+                            paddingBottom: "6px",
+                            borderRadius: "4px",
+                            paddingRight: "28px",
+                          }}
+                        >
+                          <ProjectDot color={p.color} />
+                          <span className="truncate">{p.name}</span>
+                        </NavLink>
+                        <button
+                          onClick={(e) => handleThreeDotClick(e, p)}
+                          className="absolute right-1 opacity-0 group-hover:opacity-100 p-0.5 rounded text-white/50 hover:text-white/90 hover:bg-white/10 transition-all shrink-0"
+                          aria-label="Project options"
+                        >
+                          <DotsIcon />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
 
-        {/* Workspaces section — separate, scrolls independently */}
+        {/* Workspaces section */}
         <div className="flex flex-col shrink-0">
           <SectionLabel>Workspaces</SectionLabel>
           <div className="overflow-y-auto scrollbar-sidebar" style={{ maxHeight: "140px" }}>
@@ -368,10 +547,46 @@ const Sidebar = () => {
         </div>
       </nav>
 
+      {/* ── Modals & Dialogs ───────────────────────────────────────────────── */}
+
       {showCreateModal && (
         <CreateWorkspaceModal
           onClose={() => setShowCreateModal(false)}
           onCreated={handleWorkspaceCreated}
+        />
+      )}
+
+      {menuState && (
+        <ProjectContextMenu
+          position={{ x: menuState.x, y: menuState.y }}
+          onClose={() => setMenuState(null)}
+          onShare={() => handleShare(menuState.project)}
+          onRename={() => handleRename(menuState.project)}
+          onArchive={() => handleArchive(menuState.project)}
+          onDelete={() => handleDelete(menuState.project)}
+        />
+      )}
+
+      {dialog?.type === "share" && (
+        <ShareProjectModal
+          project={dialog.project}
+          onClose={() => setDialog(null)}
+        />
+      )}
+
+      {dialog?.type === "archive" && (
+        <ArchiveProjectDialog
+          project={dialog.project}
+          onConfirm={handleConfirmArchive}
+          onCancel={() => setDialog(null)}
+        />
+      )}
+
+      {dialog?.type === "delete" && (
+        <DeleteProjectDialog
+          project={dialog.project}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setDialog(null)}
         />
       )}
     </aside>

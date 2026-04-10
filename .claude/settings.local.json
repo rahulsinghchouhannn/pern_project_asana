@@ -26,7 +26,9 @@
       "Bash(node --check src/services/organizationService.js)",
       "Bash(grep -l \"tasks.id\\\\|taskId\\\\|task_id\" d:/pern_doc_3_claude/backend/src/db/schema/*.js)",
       "Bash(ls d:/pern_doc_3_claude/backend/src/db/migrations/*.sql)",
-      "Bash(grep -r \"activity_logs.*task_id\\\\|task_id.*activity_logs\" d:/pern_doc_3_claude/backend/src/db/migrations/*.sql)"
+      "Bash(grep -r \"activity_logs.*task_id\\\\|task_id.*activity_logs\" d:/pern_doc_3_claude/backend/src/db/migrations/*.sql)",
+      "Bash(grep -l \"CREATE TABLE \\\\\"projects\\\\\"\" /d/pern_doc_3_claude/backend/src/db/migrations/*.sql)",
+      "Bash(grep -l \"custom_fields\\\\|comments\" /d/pern_doc_3_claude/backend/src/db/migrations/*.sql)"
     ]
   }
 }
