@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
 import { logout } from "@/store/slices/authSlice";
 import authService from "@/services/authService";
+import usePermissions from "@/hooks/usePermissions";
+import { useToast } from "@/components/ui/Toast";
 import useSocket from "@/hooks/useSocket";
 import Spinner from "@/components/ui/Spinner";
 import Layout from "@/components/Layout/Layout";
@@ -31,6 +33,25 @@ const RequireAuth = ({ children, isHydrated }) => {
   if (!token) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
+  return children;
+};
+
+// ─── Permission guard — redirects users without a required org-level permission
+const RequirePermission = ({ permission, children }) => {
+  const navigate = useNavigate();
+  const { show: showToast } = useToast();
+  const { can, isLoading } = usePermissions();
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!can(permission)) {
+      showToast("You do not have permission to perform this action", "error");
+      navigate("/", { replace: true });
+    }
+  }, [isLoading, can, permission, navigate, showToast]);
+
+  if (isLoading) return null;
+  if (!can(permission)) return null;
   return children;
 };
 
@@ -121,7 +142,14 @@ const App = () => {
         <Route path="/projects/:id" element={<ProjectPage />} />
         <Route path="/my-tasks" element={<MyTasksPage />} />
         <Route path="/inbox" element={<InboxPage />} />
-        <Route path="/settings/organization" element={<OrgSettingsPage />} />
+        <Route
+          path="/settings/organization"
+          element={
+            <RequirePermission permission="view_org_settings">
+              <OrgSettingsPage />
+            </RequirePermission>
+          }
+        />
         <Route path="/reporting" element={<ReportingPage />} />
         <Route path="/reporting/dashboards/:id" element={<DashboardDetailPage />} />
         <Route path="/portfolios" element={<PortfoliosPage />} />

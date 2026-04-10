@@ -119,6 +119,8 @@ const initialState = {
   refreshToken: refreshTokenFromStorage || null,
   organizations: organizationsFromStorage ? JSON.parse(organizationsFromStorage) : [],
   currentOrg: currentOrgFromStorage ? JSON.parse(currentOrgFromStorage) : null,
+  // Cache: keyed by "orgId:projectId" (projectId empty string for org-level)
+  permissionsCache: {},
   isLoading: false,
   error: null,
 };
@@ -141,6 +143,7 @@ const authSlice = createSlice({
     },
     setCurrentOrg: (state, action) => {
       state.currentOrg = action.payload;
+      state.permissionsCache = {};
       if (action.payload) {
         localStorage.setItem("currentOrg", JSON.stringify(action.payload));
       } else {
@@ -149,6 +152,16 @@ const authSlice = createSlice({
     },
     setOrganizations: (state, action) => {
       state.organizations = action.payload;
+      if (action.payload) {
+        localStorage.setItem("organizations", JSON.stringify(action.payload));
+      }
+    },
+    setPermissionsCache: (state, action) => {
+      const { key, permissions } = action.payload;
+      state.permissionsCache[key] = permissions;
+    },
+    clearPermissionsCache: (state) => {
+      state.permissionsCache = {};
     },
     tokenRefreshed: (state, action) => {
       state.token = action.payload;
@@ -160,6 +173,7 @@ const authSlice = createSlice({
       state.refreshToken = null;
       state.organizations = [];
       state.currentOrg = null;
+      state.permissionsCache = {};
       state.error = null;
       clearAuthFromStorage();
     },
@@ -283,6 +297,7 @@ const authSlice = createSlice({
     builder
       .addCase(switchOrganization.fulfilled, (state, action) => {
         state.currentOrg = action.payload;
+        state.permissionsCache = {};
         if (action.payload) {
           localStorage.setItem("currentOrg", JSON.stringify(action.payload));
         }
@@ -294,6 +309,8 @@ export const {
   setCredentials,
   setCurrentOrg,
   setOrganizations,
+  setPermissionsCache,
+  clearPermissionsCache,
   tokenRefreshed,
   logout,
   clearError,

@@ -179,7 +179,7 @@ const MembersTab = ({ orgId, can }) => {
                     </div>
                   </td>
                   <td className="py-3">
-                    {can("manage_roles") && !isCurrentUser ? (
+                    {can("manage_roles") && !isCurrentUser && m.role !== "owner" ? (
                       <select
                         value={roles.find((r) => r.name.toLowerCase() === m.role)?.id ?? ""}
                         onChange={(e) => handleRoleChange(m.userId, e.target.value)}
@@ -187,9 +187,11 @@ const MembersTab = ({ orgId, can }) => {
                         className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
                       >
                         <option value="" disabled>{m.role || "—"}</option>
-                        {roles.map((r) => (
-                          <option key={r.id} value={r.id}>{r.name}</option>
-                        ))}
+                        {roles
+                          .filter((r) => r.name.toLowerCase() !== "owner")
+                          .map((r) => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                          ))}
                       </select>
                     ) : (
                       <span className="text-gray-700 capitalize">{m.role || "—"}</span>

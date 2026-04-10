@@ -13,49 +13,37 @@ const logger = require("../config/logger");
 // ─── Core permission queries ──────────────────────────────────────────────────
 
 const getUserPermissions = async (userId, orgId, projectId = null) => {
-  // If projectId provided, check for project-level role override first
+  // Project-level override: single JOIN across projectRoles → rolePermissions
   if (projectId) {
-    const [projectRole] = await db
-      .select({ roleId: projectRoles.roleId })
+    const projectPerms = await db
+      .select({ permission: rolePermissions.permission })
       .from(projectRoles)
+      .innerJoin(rolePermissions, eq(projectRoles.roleId, rolePermissions.roleId))
       .where(
         and(
           eq(projectRoles.userId, userId),
           eq(projectRoles.projectId, projectId)
         )
-      )
-      .limit(1);
+      );
 
-    if (projectRole) {
-      const perms = await db
-        .select({ permission: rolePermissions.permission })
-        .from(rolePermissions)
-        .where(eq(rolePermissions.roleId, projectRole.roleId));
-
-      return new Set(perms.map((p) => p.permission));
+    if (projectPerms.length > 0) {
+      return new Set(projectPerms.map((p) => p.permission));
     }
   }
 
-  // Fall back to org-level role
-  const [orgRole] = await db
-    .select({ roleId: userRoles.roleId })
+  // Org-level role: single JOIN across userRoles → rolePermissions
+  const orgPerms = await db
+    .select({ permission: rolePermissions.permission })
     .from(userRoles)
+    .innerJoin(rolePermissions, eq(userRoles.roleId, rolePermissions.roleId))
     .where(
       and(
         eq(userRoles.userId, userId),
         eq(userRoles.organizationId, orgId)
       )
-    )
-    .limit(1);
+    );
 
-  if (!orgRole) return new Set();
-
-  const perms = await db
-    .select({ permission: rolePermissions.permission })
-    .from(rolePermissions)
-    .where(eq(rolePermissions.roleId, orgRole.roleId));
-
-  return new Set(perms.map((p) => p.permission));
+  return new Set(orgPerms.map((p) => p.permission));
 };
 
 const hasPermission = async (userId, orgId, permission, projectId = null) => {
@@ -212,7 +200,7 @@ const deleteRole = async (roleId, orgId) => {
 };
 
 const assignOrgRole = async (userId, orgId, roleId) => {
-  // Prevent changing the role of the last owner
+  // Resolve the Owner system role for this org
   const [ownerRole] = await db
     .select({ id: roles.id })
     .from(roles)
@@ -225,7 +213,15 @@ const assignOrgRole = async (userId, orgId, roleId) => {
     )
     .limit(1);
 
-  if (ownerRole && ownerRole.id !== roleId) {
+  // Prevent manually assigning the Owner role to anyone
+  if (ownerRole && ownerRole.id === roleId) {
+    const err = new Error("The Owner role cannot be manually assigned");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Prevent changing the role of the last owner
+  if (ownerRole) {
     const owners = await db
       .select({ userId: userRoles.userId })
       .from(userRoles)

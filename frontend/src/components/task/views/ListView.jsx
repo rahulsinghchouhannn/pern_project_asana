@@ -13,6 +13,7 @@ import socketService from "@/services/socketService";
 import AddCustomFieldModal from "@/components/customFields/AddCustomFieldModal";
 import { formatMinutes } from "@/utils/timeFormat";
 import { getRunningTimer, subscribeTimer, getElapsedMinutes } from "@/utils/timerStore";
+import usePermissions from "@/hooks/usePermissions";
 
 // ─── Field type icons ─────────────────────────────────────────────────────────
 
@@ -100,6 +101,7 @@ const ListView = ({
   onSectionDeleted,
 }) => {
   const currentUser = useSelector((state) => state.auth.user);
+  const { can, denyToast } = usePermissions(projectId);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [customFields, setCustomFields] = useState([]);
   const [visibleFieldIds, setVisibleFieldIds] = useState([]);
@@ -413,6 +415,7 @@ const ListView = ({
   // ── Inline row ─────────────────────────────────────────────────────────────
 
   const openInline = (area) => {
+    if (!can("create_task")) { denyToast(); return; }
     setActiveInlineArea(area);
     setAddingSubtaskFor(null); // close any open subtask input
   };
@@ -690,21 +693,24 @@ const ListView = ({
 
   // ── Shared "Add task…" row ─────────────────────────────────────────────────
 
-  const renderAddTaskTrigger = (areaId) => (
-    <tr>
-      <td colSpan={colCount + 1} className="py-1.5 pl-10">
-        <button
-          onClick={() => openInline(areaId)}
-          className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add task…
-        </button>
-      </td>
-    </tr>
-  );
+  const renderAddTaskTrigger = (areaId) => {
+    if (!can("create_task")) return null;
+    return (
+      <tr>
+        <td colSpan={colCount + 1} className="py-1.5 pl-10">
+          <button
+            onClick={() => openInline(areaId)}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add task…
+          </button>
+        </td>
+      </tr>
+    );
+  };
 
   // ── Subtask rows renderer ──────────────────────────────────────────────────
   // Renders the expanded subtask rows + inline add input for a given parent task.

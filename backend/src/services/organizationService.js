@@ -336,6 +336,26 @@ const acceptInvitation = async (token, userId) => {
       .values({ organizationId: invitation.organizationId, userId, role: "member" })
       .onConflictDoNothing();
 
+    // Assign the Member system role in userRoles so permission checks work
+    const [memberRole] = await tx
+      .select({ id: roles.id })
+      .from(roles)
+      .where(
+        and(
+          eq(roles.organizationId, invitation.organizationId),
+          eq(roles.name, "Member"),
+          eq(roles.isSystem, true)
+        )
+      )
+      .limit(1);
+
+    if (memberRole) {
+      await tx
+        .insert(userRoles)
+        .values({ userId, organizationId: invitation.organizationId, roleId: memberRole.id })
+        .onConflictDoNothing();
+    }
+
     // Upsert project member — safe even if user is already in the project
     if (invitation.projectId) {
       await tx

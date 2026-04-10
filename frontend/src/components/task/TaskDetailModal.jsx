@@ -5,6 +5,7 @@ import customFieldService from "@/services/customFieldService";
 import TaskPriorityBadge from "./TaskPriorityBadge";
 import CustomFieldValue from "@/components/customFields/CustomFieldValue";
 import ActivityFeed from "@/components/collaboration/ActivityFeed";
+import usePermissions from "@/hooks/usePermissions";
 
 const PRIORITIES = ["none", "low", "medium", "high", "urgent"];
 
@@ -27,6 +28,7 @@ const useDebounce = (fn, delay) => {
 
 const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = [], onClose, onUpdated }) => {
   const { user } = useAppSelector((s) => s.auth);
+  const { can, denyToast } = usePermissions(projectId);
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -64,6 +66,7 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
   }, [projectId, task?.projectId]);
 
   const handleCustomFieldChange = async (fieldId, valueData) => {
+    if (!can("edit_task")) { denyToast(); return; }
     try {
       const res = await customFieldService.setTaskFieldValue(taskId, fieldId, valueData);
       const updated = res.data.data;
@@ -75,6 +78,10 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
 
   const save = async (patch) => {
     if (!task) return;
+    if (!can("edit_task")) {
+      denyToast();
+      return;
+    }
     setSaving(true);
     try {
       const res = await taskService.updateTask(task.id, patch);
@@ -111,6 +118,7 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
 
   const handleAddAssignee = async () => {
     if (!addAssigneeId) return;
+    if (!can("assign_task")) { denyToast(); return; }
     try {
       const res = await taskService.addAssignee(task.id, addAssigneeId);
       setTask(res.data.data);
@@ -121,6 +129,7 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
   };
 
   const handleRemoveAssignee = async (userId) => {
+    if (!can("assign_task")) { denyToast(); return; }
     try {
       await taskService.removeAssignee(task.id, userId);
       setTask((t) => ({ ...t, assignees: t.assignees.filter((a) => a.userId !== userId) }));
@@ -176,9 +185,11 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
             {/* Title */}
             <textarea
               value={task.title}
-              onChange={(e) => handleFieldChange("title", e.target.value)}
+              onChange={(e) => can("edit_task") && handleFieldChange("title", e.target.value)}
+              onClick={() => !can("edit_task") && denyToast()}
+              readOnly={!can("edit_task")}
               rows={2}
-              className="w-full text-lg font-semibold text-gray-900 resize-none border-0 focus:outline-none focus:ring-0 p-0 leading-snug"
+              className={`w-full text-lg font-semibold text-gray-900 resize-none border-0 focus:outline-none focus:ring-0 p-0 leading-snug ${!can("edit_task") ? "cursor-default select-text" : ""}`}
               placeholder="Task name"
             />
 
@@ -187,10 +198,12 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
               <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Description</label>
               <textarea
                 value={task.description ?? ""}
-                onChange={(e) => handleFieldChange("description", e.target.value)}
+                onChange={(e) => can("edit_task") && handleFieldChange("description", e.target.value)}
+                onClick={() => !can("edit_task") && denyToast()}
+                readOnly={!can("edit_task")}
                 rows={3}
-                placeholder="Add a description…"
-                className="mt-1 w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder={can("edit_task") ? "Add a description…" : "No description"}
+                className={`mt-1 w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 ${!can("edit_task") ? "bg-gray-50 cursor-default" : ""}`}
               />
             </div>
 
@@ -202,7 +215,9 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
                 <select
                   value={task.statusId}
                   onChange={(e) => handleFieldChange("statusId", e.target.value)}
-                  className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onClick={() => !can("edit_task") && denyToast()}
+                  disabled={!can("edit_task")}
+                  className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:cursor-default"
                 >
                   {statuses.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -218,7 +233,9 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
                 <select
                   value={task.priority ?? "none"}
                   onChange={(e) => handleFieldChange("priority", e.target.value)}
-                  className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onClick={() => !can("edit_task") && denyToast()}
+                  disabled={!can("edit_task")}
+                  className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-50 disabled:cursor-default"
                 >
                   {PRIORITIES.map((p) => (
                     <option key={p} value={p}>
@@ -237,7 +254,9 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
                   onChange={(e) =>
                     handleFieldChange("startDate", e.target.value ? new Date(e.target.value).toISOString() : null)
                   }
-                  className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onClick={() => !can("edit_task") && denyToast()}
+                  readOnly={!can("edit_task")}
+                  className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 read-only:bg-gray-50 read-only:cursor-default"
                 />
               </div>
 
@@ -250,7 +269,9 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
                   onChange={(e) =>
                     handleFieldChange("dueDate", e.target.value ? new Date(e.target.value).toISOString() : null)
                   }
-                  className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onClick={() => !can("edit_task") && denyToast()}
+                  readOnly={!can("edit_task")}
+                  className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 read-only:bg-gray-50 read-only:cursor-default"
                 />
               </div>
             </div>
@@ -264,24 +285,26 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
                     key={a.userId}
                     className="flex items-center gap-1 bg-gray-100 rounded-full px-2 py-0.5"
                   >
-                    <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                    <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
                       <span className="text-xs font-medium text-indigo-700">
                         {a.name?.[0]?.toUpperCase() ?? "?"}
                       </span>
                     </div>
                     <span className="text-xs text-gray-700">{a.name}</span>
-                    <button
-                      onClick={() => handleRemoveAssignee(a.userId)}
-                      className="text-gray-400 hover:text-gray-600 ml-0.5"
-                    >
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+                    {can("assign_task") && (
+                      <button
+                        onClick={() => handleRemoveAssignee(a.userId)}
+                        className="text-gray-400 hover:text-gray-600 ml-0.5"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
-              {projectMembers.length > 0 && (
+              {can("assign_task") && projectMembers.length > 0 && (
                 <div className="mt-2 flex gap-2">
                   <select
                     value={addAssigneeId}
