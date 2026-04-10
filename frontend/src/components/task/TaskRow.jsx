@@ -933,6 +933,9 @@ const TaskRow = ({
   innerRef,
   draggableProps,
   dragHandleProps,
+  onSubtaskDragStart,
+  onSubtaskDragEnd,
+  rowProps = {},
 }) => {
   const [title, setTitle] = useState(task.title ?? "");
   const [assignees, setAssignees] = useState(task.assignees ?? []);
@@ -1045,6 +1048,7 @@ const TaskRow = ({
       <tr
         ref={innerRef}
         {...draggableProps}
+        {...rowProps}
         onContextMenu={handleContextMenu}
         className={`group border-b border-gray-100 hover:bg-gray-50/70 h-10 ${isSubtask ? "bg-gray-50/30" : ""}`}
       >
@@ -1054,6 +1058,18 @@ const TaskRow = ({
             {!isSubtask && dragHandleProps ? (
               <span
                 {...dragHandleProps}
+                className="shrink-0 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-opacity select-none px-0.5"
+                title="Drag to reorder"
+              >
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
+                </svg>
+              </span>
+            ) : isSubtask && onSubtaskDragStart ? (
+              <span
+                draggable
+                onDragStart={(e) => onSubtaskDragStart(task, e, e.currentTarget.closest("tr"))}
+                onDragEnd={onSubtaskDragEnd}
                 className="shrink-0 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-opacity select-none px-0.5"
                 title="Drag to reorder"
               >

@@ -163,10 +163,25 @@ const ListView = ({
   // emit (which fires before the HTTP response) doesn't add a duplicate row.
   const pendingSubtaskCreateCount = useRef(0);
   const subtaskSocketBuffer = useRef([]);
+  const [subtaskDragState, setSubtaskDragState] = useState({
+    draggingSubtaskId: null,
+    parentTaskId: null,
+    dropIndex: null,
+  });
+  const subtaskDragStateRef = useRef({
+    draggingSubtaskId: null,
+    parentTaskId: null,
+    dropIndex: null,
+  });
 
   useEffect(() => {
     expandedTaskIdsRef.current = expandedTaskIds;
   }, [expandedTaskIds]);
+
+  const setSubtaskDrag = useCallback((next) => {
+    subtaskDragStateRef.current = next;
+    setSubtaskDragState(next);
+  }, []);
 
   // Sync sections whenever the prop changes
   useEffect(() => { setSections(sectionsProp); }, [sectionsProp]);
@@ -312,14 +327,45 @@ const ListView = ({
       setAddingSubtaskFor((prev) => (prev === taskId ? null : prev));
     };
 
+    const handleSocketTaskPositionsUpdated = ({ updates }) => {
+      if (!updates?.length) return;
+      setSubtasksMap((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const parentId of Object.keys(next)) {
+          const subtasks = next[parentId];
+          if (!subtasks?.length) continue;
+          const updateMap = new Map(
+            updates
+              .filter((u) => subtasks.some((t) => t.id === u.taskId))
+              .map((u) => [u.taskId, u])
+          );
+          if (updateMap.size === 0) continue;
+          changed = true;
+          next[parentId] = subtasks
+            .map((t) => {
+              const u = updateMap.get(t.id);
+              if (!u) return t;
+              const updated = { ...t, position: u.position, statusId: u.statusId };
+              if (u.sectionId !== undefined) updated.sectionId = u.sectionId;
+              return updated;
+            })
+            .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+        }
+        return changed ? next : prev;
+      });
+    };
+
     socketService.on("task:created", handleSocketTaskCreated);
     socketService.on("task:updated", handleSocketTaskUpdated);
     socketService.on("task:deleted", handleSocketTaskDeleted);
+    socketService.on("task:positions_updated", handleSocketTaskPositionsUpdated);
 
     return () => {
       socketService.off("task:created", handleSocketTaskCreated);
       socketService.off("task:updated", handleSocketTaskUpdated);
       socketService.off("task:deleted", handleSocketTaskDeleted);
+      socketService.off("task:positions_updated", handleSocketTaskPositionsUpdated);
     };
   }, [projectId, tasks, onTaskUpdated]);
 
@@ -692,6 +738,85 @@ const ListView = ({
     }
   }, [unsectionedTasks, tasksBySection, onTaskUpdated]);
 
+  // ── Subtask drag-and-drop (native HTML5, scoped per parent task) ──────────
+
+  const handleSubtaskDragStart = useCallback((subtask, nativeEvent, rowEl) => {
+    if (!subtask?.parentTaskId) return;
+    setSubtaskDrag({
+      draggingSubtaskId: subtask.id,
+      parentTaskId: subtask.parentTaskId,
+      dropIndex: null,
+    });
+
+    if (rowEl && nativeEvent.dataTransfer) {
+      const clone = rowEl.cloneNode(true);
+      Object.assign(clone.style, {
+        position: "fixed",
+        top: "-9999px",
+        left: "-9999px",
+        width: `${rowEl.offsetWidth}px`,
+        background: "#ffffff",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+        borderRadius: "6px",
+        border: "1px solid #e5e7eb",
+        opacity: "1",
+        pointerEvents: "none",
+        zIndex: "9999",
+      });
+      document.body.appendChild(clone);
+      nativeEvent.dataTransfer.effectAllowed = "move";
+      nativeEvent.dataTransfer.setDragImage(clone, 20, 16);
+      requestAnimationFrame(() => document.body.removeChild(clone));
+    }
+  }, [setSubtaskDrag]);
+
+  const handleSubtaskDragEnd = useCallback(() => {
+    setSubtaskDrag({ draggingSubtaskId: null, parentTaskId: null, dropIndex: null });
+  }, [setSubtaskDrag]);
+
+  const makeSubtaskDragOver = useCallback((parentTaskId, index) => (e) => {
+    const current = subtaskDragStateRef.current;
+    if (!current.draggingSubtaskId || current.parentTaskId !== parentTaskId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    const rect = e.currentTarget.getBoundingClientRect();
+    const insertBefore = e.clientY < rect.top + rect.height / 2;
+    const nextIndex = insertBefore ? index : index + 1;
+    if (current.dropIndex !== nextIndex) {
+      setSubtaskDrag({ ...current, dropIndex: nextIndex });
+    }
+  }, [setSubtaskDrag]);
+
+  const handleSubtaskDrop = useCallback(async (parentTaskId) => {
+    const current = subtaskDragStateRef.current;
+    const { draggingSubtaskId, parentTaskId: draggingParentId, dropIndex } = current;
+    setSubtaskDrag({ draggingSubtaskId: null, parentTaskId: null, dropIndex: null });
+
+    if (!draggingSubtaskId || draggingParentId !== parentTaskId || dropIndex === null) return;
+    const source = subtasksMap[parentTaskId] ?? [];
+    const srcIndex = source.findIndex((t) => t.id === draggingSubtaskId);
+    if (srcIndex === -1 || dropIndex === srcIndex || dropIndex === srcIndex + 1) return;
+
+    const reordered = source.filter((t) => t.id !== draggingSubtaskId);
+    const insertAt = dropIndex > srcIndex ? dropIndex - 1 : dropIndex;
+    reordered.splice(insertAt, 0, source[srcIndex]);
+
+    setSubtasksMap((prev) => ({ ...prev, [parentTaskId]: reordered }));
+    const updates = reordered.map((t, i) => ({
+      taskId: t.id,
+      statusId: t.statusId,
+      position: i,
+      sectionId: t.sectionId ?? null,
+    }));
+
+    try {
+      await taskService.bulkUpdatePositions(updates);
+    } catch {
+      setSubtasksMap((prev) => ({ ...prev, [parentTaskId]: source }));
+    }
+  }, [subtasksMap, setSubtaskDrag]);
+
   // ── Shared "Add task…" row ─────────────────────────────────────────────────
 
   const renderAddTaskTrigger = (areaId) => {
@@ -719,11 +844,40 @@ const ListView = ({
   const renderSubtaskRows = (parentTask) => {
     if (!expandedTaskIds.has(parentTask.id)) return null;
     const subtasks = subtasksMap[parentTask.id] ?? [];
+    const isDraggingHere = subtaskDragState.parentTaskId === parentTask.id;
 
     return (
       <>
-        {subtasks.map((subtask) => (
-          <TaskRow key={subtask.id} {...subtaskRowProps(subtask)} />
+        {isDraggingHere && subtaskDragState.dropIndex === 0 && (
+          <tr>
+            <td colSpan={colCount + 1} className="p-0">
+              <div className="h-0.5 bg-indigo-500 ml-16 mr-2" />
+            </td>
+          </tr>
+        )}
+
+        {subtasks.map((subtask, index) => (
+          <React.Fragment key={subtask.id}>
+            <TaskRow
+              {...subtaskRowProps(subtask)}
+              onSubtaskDragStart={handleSubtaskDragStart}
+              onSubtaskDragEnd={handleSubtaskDragEnd}
+              rowProps={{
+                onDragOver: makeSubtaskDragOver(parentTask.id, index),
+                onDrop: (e) => { e.preventDefault(); handleSubtaskDrop(parentTask.id); },
+                style: {
+                  opacity: subtaskDragState.draggingSubtaskId === subtask.id ? 0.4 : 1,
+                },
+              }}
+            />
+            {isDraggingHere && subtaskDragState.dropIndex === index + 1 && (
+              <tr>
+                <td colSpan={colCount + 1} className="p-0">
+                  <div className="h-0.5 bg-indigo-500 ml-16 mr-2" />
+                </td>
+              </tr>
+            )}
+          </React.Fragment>
         ))}
 
         {addingSubtaskFor === parentTask.id && (
