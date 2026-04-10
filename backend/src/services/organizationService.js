@@ -49,20 +49,18 @@ const toSlug = (name) =>
 
 const uniqueSlug = async (baseName) => {
   const base = toSlug(baseName);
-  let slug = base;
-  let attempt = 0;
 
-  while (true) {
-    const [existing] = await db
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(eq(organizations.slug, slug))
-      .limit(1);
+  const [existing] = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(eq(organizations.slug, base))
+    .limit(1);
 
-    if (!existing) return slug;
-    attempt += 1;
-    slug = `${base}-${attempt}`;
-  }
+  if (!existing) return base;
+
+  // Append a 6-char random hex suffix — collision probability is negligible
+  // and avoids any unbounded loop.
+  return `${base}-${crypto.randomBytes(3).toString("hex")}`;
 };
 
 // ─── Organization operations ──────────────────────────────────────────────────
