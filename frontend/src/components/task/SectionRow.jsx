@@ -15,6 +15,9 @@ import sectionService from "@/services/sectionService";
  *  onDeleteWithTasks()  – called when "Delete section and all tasks" is confirmed
  *  onAddTask()          – called when "+" is clicked
  *  colCount             – total column count (for colSpan)
+ *  canEdit              – whether the user can edit/rename/reorder sections
+ *  canDelete            – whether the user can delete sections
+ *  onPermissionDenied() – toast callback for denied permission
  *  onSectionDragStart(sectionId) – native HTML5 drag start callback
  *  onSectionDragEnd()            – native HTML5 drag end callback
  */
@@ -31,6 +34,9 @@ const SectionRow = ({
   onMoveUp,
   onMoveDown,
   colCount = 4,
+  canEdit = true,
+  canDelete = true,
+  onPermissionDenied,
   onSectionDragStart,
   onSectionDragEnd,
 }) => {
@@ -67,6 +73,7 @@ const SectionRow = ({
   }, [showMenu]);
 
   const startEdit = () => {
+    if (!canEdit) { onPermissionDenied?.(); return; }
     setEditing(true);
     setTimeout(() => {
       inputRef.current?.focus();
@@ -117,8 +124,9 @@ const SectionRow = ({
         <div className="flex items-center h-9 gap-1">
           {/* Section drag handle — native HTML5 drag */}
           <span
-            draggable
+            draggable={canEdit}
             onDragStart={(e) => {
+              if (!canEdit) { e.preventDefault(); onPermissionDenied?.(); return; }
               e.dataTransfer.effectAllowed = "move";
               e.dataTransfer.setData("text/plain", section.id);
               onSectionDragStart?.(section.id, e, rowRef.current);
@@ -223,7 +231,7 @@ const SectionRow = ({
 
                 {onMoveUp && (
                   <button
-                    onClick={() => { setShowMenu(false); onMoveUp(); }}
+                    onClick={() => { setShowMenu(false); if (!canEdit) { onPermissionDenied?.(); return; } onMoveUp(); }}
                     className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
                     <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -235,7 +243,7 @@ const SectionRow = ({
 
                 {onMoveDown && (
                   <button
-                    onClick={() => { setShowMenu(false); onMoveDown(); }}
+                    onClick={() => { setShowMenu(false); if (!canEdit) { onPermissionDenied?.(); return; } onMoveDown(); }}
                     className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
                     <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -248,7 +256,7 @@ const SectionRow = ({
                 <div className="my-1 border-t border-gray-100" />
 
                 <button
-                  onClick={() => { setShowMenu(false); onDeleteOnly?.(); }}
+                  onClick={() => { setShowMenu(false); if (!canDelete) { onPermissionDenied?.(); return; } onDeleteOnly?.(); }}
                   className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                 >
                   <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -258,7 +266,7 @@ const SectionRow = ({
                 </button>
 
                 <button
-                  onClick={() => { setShowMenu(false); onDeleteWithTasks?.(); }}
+                  onClick={() => { setShowMenu(false); if (!canDelete) { onPermissionDenied?.(); return; } onDeleteWithTasks?.(); }}
                   className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                 >
                   <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -1082,6 +1082,9 @@ const ListView = ({
                       onMoveUp={sectionIndex > 0 ? () => handleMoveSection(section.id, "up") : null}
                       onMoveDown={sectionIndex < sections.length - 1 ? () => handleMoveSection(section.id, "down") : null}
                       colCount={colCount}
+                      canEdit={can("edit_task")}
+                      canDelete={can("delete_task")}
+                      onPermissionDenied={denyToast}
                       onSectionDragStart={handleSectionDragStart}
                       onSectionDragEnd={handleSectionDragEnd}
                     />

@@ -19,12 +19,13 @@ router.use(authMiddleware, orgMiddleware);
 // ── Collection ────────────────────────────────────────────────────────────────
 router.get("/", sectionController.list);
 router.post("/", requirePermission(PERMISSIONS.CREATE_TASK), validateRequest(createSectionSchema), sectionController.create);
-router.post("/reorder", requirePermission(PERMISSIONS.CREATE_TASK), validateRequest(reorderSectionsSchema), sectionController.reorder);
+router.post("/reorder", requirePermission(PERMISSIONS.EDIT_TASK), validateRequest(reorderSectionsSchema), sectionController.reorder);
 
 // ── Member ────────────────────────────────────────────────────────────────────
 router.get("/:sectionId/task-count", sectionController.getTaskCount);
-router.patch("/:sectionId", requirePermission(PERMISSIONS.CREATE_TASK), validateRequest(updateSectionSchema), sectionController.update);
-router.delete("/:sectionId", requirePermission(PERMISSIONS.CREATE_TASK), sectionController.deleteOnly);
-router.delete("/:sectionId/with-tasks", requirePermission(PERMISSIONS.CREATE_TASK), sectionController.deleteWithTasks);
+router.patch("/:sectionId", requirePermission(PERMISSIONS.EDIT_TASK), validateRequest(updateSectionSchema), sectionController.update);
+router.delete("/:sectionId", requirePermission(PERMISSIONS.DELETE_TASK), sectionController.deleteOnly);
+router.delete("/:sectionId/with-tasks", requirePermission(PERMISSIONS.DELETE_TASK), sectionController.deleteWithTasks);
 
 module.exports = router;
+
