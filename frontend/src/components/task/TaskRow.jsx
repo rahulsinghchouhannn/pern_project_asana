@@ -121,7 +121,7 @@ const toEditableFormat = (minutes) => {
   return `${h}:${String(m).padStart(2, "0")}`;
 };
 
-const EstimatedTimeCell = ({ field, initialValue, taskId }) => {
+const EstimatedTimeCell = ({ field, initialValue, taskId, readOnly = false, onPermissionDenied }) => {
   const [localMinutes, setLocalMinutes] = useState(
     () => initialValue?.valueNumber != null ? Number(initialValue.valueNumber) : null
   );
@@ -212,6 +212,7 @@ const EstimatedTimeCell = ({ field, initialValue, taskId }) => {
     <button
       onClick={(e) => {
         e.stopPropagation();
+        if (readOnly) { onPermissionDenied?.(); return; }
         activeEditRef.current = true;
         isDirtyRef.current = false;
         // Initialize input in a format that round-trips through parseTimeInput
@@ -231,7 +232,7 @@ const EstimatedTimeCell = ({ field, initialValue, taskId }) => {
 
 // ─── ActualTimeCell ───────────────────────────────────────────────────────────
 
-const ActualTimeCell = ({ field, initialValue, taskId }) => {
+const ActualTimeCell = ({ field, initialValue, taskId, readOnly = false, onPermissionDenied }) => {
   const currentUser = useSelector((state) => state.auth.user);
   const userId = currentUser?.id;
 
@@ -299,6 +300,7 @@ const ActualTimeCell = ({ field, initialValue, taskId }) => {
 
   const openPanel = (e) => {
     e.stopPropagation();
+    if (readOnly) { onPermissionDenied?.(); return; }
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       const panelW = 300;
@@ -568,13 +570,13 @@ const ActualTimeCell = ({ field, initialValue, taskId }) => {
 const DROPDOWN_W = 160;
 const DROPDOWN_H = 200;
 
-const CustomFieldCell = ({ field, initialValue, taskId, projectMembers = [] }) => {
+const CustomFieldCell = ({ field, initialValue, taskId, projectMembers = [], readOnly = false, onPermissionDenied }) => {
   // Intercept timer field types first
   if (field.type === "estimated_time") {
-    return <EstimatedTimeCell field={field} initialValue={initialValue} taskId={taskId} />;
+    return <EstimatedTimeCell field={field} initialValue={initialValue} taskId={taskId} readOnly={readOnly} onPermissionDenied={onPermissionDenied} />;
   }
   if (field.type === "actual_time") {
-    return <ActualTimeCell field={field} initialValue={initialValue} taskId={taskId} />;
+    return <ActualTimeCell field={field} initialValue={initialValue} taskId={taskId} readOnly={readOnly} onPermissionDenied={onPermissionDenied} />;
   }
 
   const [localValue, setLocalValue] = useState(() => extractDisplayValue(field.type, initialValue));
@@ -660,6 +662,7 @@ const CustomFieldCell = ({ field, initialValue, taskId, projectMembers = [] }) =
       <button
         onClick={(e) => {
           e.stopPropagation();
+          if (readOnly) { onPermissionDenied?.(); return; }
           activeEditRef.current = true;
           setEditing(true);
         }}
@@ -679,7 +682,7 @@ const CustomFieldCell = ({ field, initialValue, taskId, projectMembers = [] }) =
       <div className="relative w-full">
         <button
           ref={dropdownTriggerRef}
-          onClick={openDropdown}
+          onClick={(e) => { if (readOnly) { e.stopPropagation(); onPermissionDenied?.(); return; } openDropdown(e); }}
           className={`w-full text-left min-h-5.5 px-1 rounded transition-colors hover:bg-gray-100
             ${!localValue ? "text-gray-200" : ""}`}
         >
@@ -757,6 +760,7 @@ const CustomFieldCell = ({ field, initialValue, taskId, projectMembers = [] }) =
           ref={dateTriggerRef}
           onClick={(e) => {
             e.stopPropagation();
+            if (readOnly) { onPermissionDenied?.(); return; }
             activeEditRef.current = true;
             setShowDate((v) => !v);
           }}
@@ -789,7 +793,7 @@ const CustomFieldCell = ({ field, initialValue, taskId, projectMembers = [] }) =
       <div className="relative w-full">
         <button
           ref={dropdownTriggerRef}
-          onClick={openDropdown}
+          onClick={(e) => { if (readOnly) { e.stopPropagation(); onPermissionDenied?.(); return; } openDropdown(e); }}
           className="w-full text-left min-h-5.5 px-1 rounded transition-colors hover:bg-gray-100 flex items-center gap-1.5"
         >
           {selectedMember ? (
@@ -930,6 +934,9 @@ const TaskRow = ({
   onToggleExpand,
   onAddSubtask,
   onDeleteTask,
+  canEdit = true,
+  canAssign = true,
+  onPermissionDenied,
   innerRef,
   draggableProps,
   dragHandleProps,
@@ -971,6 +978,7 @@ const TaskRow = ({
   };
 
   const handleConvertType = async (newType) => {
+    if (!canEdit) { onPermissionDenied?.(); return; }
     const prevType = taskType;
     setTaskType(newType);
     try {
@@ -985,6 +993,7 @@ const TaskRow = ({
   const handleAddSubtaskClick = () => onAddSubtask?.(task.id);
 
   const handleTitleChange = (e) => {
+    if (!canEdit) return;
     const val = e.target.value;
     setTitle(val);
     clearTimeout(debounceRef.current);
@@ -999,6 +1008,7 @@ const TaskRow = ({
 
   const handleToggleComplete = async (e) => {
     e.stopPropagation();
+    if (!canEdit) { onPermissionDenied?.(); return; }
     const next = !isCompleted;
     setIsCompleted(next);
     try {
@@ -1012,6 +1022,7 @@ const TaskRow = ({
   };
 
   const handleAssigneeSelect = async (member) => {
+    if (!canAssign) { onPermissionDenied?.(); return; }
     setAssignees([member]);
     setShowAssignee(false);
     try {
@@ -1025,6 +1036,7 @@ const TaskRow = ({
   };
 
   const handleDateSelect = async (date) => {
+    if (!canEdit) { onPermissionDenied?.(); return; }
     setDueDate(date ? date.toISOString() : null);
     setShowDatePicker(false);
     try {
@@ -1131,9 +1143,11 @@ const TaskRow = ({
               onChange={handleTitleChange}
               onFocus={() => { isEditingTitleRef.current = true; }}
               onBlur={() => { isEditingTitleRef.current = false; }}
-              onClick={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); if (!canEdit) onPermissionDenied?.(); }}
+              readOnly={!canEdit}
               className={`flex-1 text-sm bg-transparent outline-none min-w-0 rounded px-1 py-0.5
                 focus:bg-white focus:ring-1 focus:ring-indigo-300 transition-shadow
+                ${!canEdit ? "cursor-default" : ""}
                 ${isCompleted ? "line-through text-gray-400" : isMilestone ? "font-semibold text-gray-800" : "text-gray-800"}`}
             />
 
@@ -1162,7 +1176,7 @@ const TaskRow = ({
         <td className="py-0 px-3 w-40 relative border-r border-gray-200">
           <button
             ref={assigneeTriggerRef}
-            onClick={(e) => { e.stopPropagation(); setShowAssignee((v) => !v); setShowDatePicker(false); }}
+            onClick={(e) => { e.stopPropagation(); if (!canAssign) { onPermissionDenied?.(); return; } setShowAssignee((v) => !v); setShowDatePicker(false); }}
             className="flex items-center gap-1.5 max-w-full"
             title={primaryAssignee ? primaryAssignee.name : "Assign member"}
           >
@@ -1202,7 +1216,7 @@ const TaskRow = ({
         <td className="py-0 px-3 w-27.5 relative border-r border-gray-200">
           <button
             ref={dateTriggerRef}
-            onClick={(e) => { e.stopPropagation(); setShowDatePicker((v) => !v); setShowAssignee(false); }}
+            onClick={(e) => { e.stopPropagation(); if (!canEdit) { onPermissionDenied?.(); return; } setShowDatePicker((v) => !v); setShowAssignee(false); }}
             className="flex items-center"
             title="Set due date"
           >
@@ -1238,6 +1252,8 @@ const TaskRow = ({
                 initialValue={value}
                 taskId={task.id}
                 projectMembers={projectMembers}
+                readOnly={!canEdit}
+                onPermissionDenied={onPermissionDenied}
               />
             </td>
           );

@@ -552,6 +552,9 @@ const ListView = ({
     onToggleExpand: handleToggleExpand,
     onAddSubtask: handleAddSubtask,
     onDeleteTask: handleDeleteTask,
+    canEdit: can("edit_task"),
+    canAssign: can("assign_task"),
+    onPermissionDenied: denyToast,
   });
 
   const subtaskRowProps = (subtask) => ({
@@ -574,6 +577,9 @@ const ListView = ({
     onOpenDetail: handleOpenDetail,
     isSubtask: true,
     onDeleteTask: handleDeleteTask,
+    canEdit: can("edit_task"),
+    canAssign: can("assign_task"),
+    onPermissionDenied: denyToast,
   });
 
   const inlineRowProps = (areaId) => ({
@@ -820,7 +826,6 @@ const ListView = ({
   // ── Shared "Add task…" row ─────────────────────────────────────────────────
 
   const renderAddTaskTrigger = (areaId) => {
-    if (!can("create_task")) return null;
     return (
       <tr>
         <td colSpan={colCount + 1} className="py-1.5 pl-10">
@@ -921,6 +926,7 @@ const ListView = ({
           <td colSpan={colCount + 1} className="py-1 pl-16">
             <button
               onClick={() => {
+                if (!can("create_task")) { denyToast(); return; }
                 setSubtaskInputKey((k) => k + 1);
                 setAddingSubtaskFor(parentTask.id);
               }}
@@ -1142,6 +1148,7 @@ const ListView = ({
                 <td colSpan={colCount + 1} className="py-3 pl-4">
                   <button
                     onClick={() => {
+                      if (!can("create_task")) { denyToast(); return; }
                       setSectionInputKey((k) => k + 1);
                       setShowAddSection(true);
                     }}

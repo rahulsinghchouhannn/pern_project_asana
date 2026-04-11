@@ -3,6 +3,8 @@ const sectionController = require("../controllers/sectionController");
 const { validateRequest } = require("../middleware/validateRequest");
 const authMiddleware = require("../middleware/authMiddleware");
 const { orgMiddleware } = require("../middleware/orgMiddleware");
+const { requirePermission } = require("../services/permissionService");
+const { PERMISSIONS } = require("../config/permissions");
 const {
   createSectionSchema,
   updateSectionSchema,
@@ -16,13 +18,13 @@ router.use(authMiddleware, orgMiddleware);
 
 // ── Collection ────────────────────────────────────────────────────────────────
 router.get("/", sectionController.list);
-router.post("/", validateRequest(createSectionSchema), sectionController.create);
-router.post("/reorder", validateRequest(reorderSectionsSchema), sectionController.reorder);
+router.post("/", requirePermission(PERMISSIONS.CREATE_TASK), validateRequest(createSectionSchema), sectionController.create);
+router.post("/reorder", requirePermission(PERMISSIONS.CREATE_TASK), validateRequest(reorderSectionsSchema), sectionController.reorder);
 
 // ── Member ────────────────────────────────────────────────────────────────────
 router.get("/:sectionId/task-count", sectionController.getTaskCount);
-router.patch("/:sectionId", validateRequest(updateSectionSchema), sectionController.update);
-router.delete("/:sectionId", sectionController.deleteOnly);
-router.delete("/:sectionId/with-tasks", sectionController.deleteWithTasks);
+router.patch("/:sectionId", requirePermission(PERMISSIONS.CREATE_TASK), validateRequest(updateSectionSchema), sectionController.update);
+router.delete("/:sectionId", requirePermission(PERMISSIONS.CREATE_TASK), sectionController.deleteOnly);
+router.delete("/:sectionId/with-tasks", requirePermission(PERMISSIONS.CREATE_TASK), sectionController.deleteWithTasks);
 
 module.exports = router;

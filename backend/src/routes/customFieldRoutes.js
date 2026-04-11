@@ -38,9 +38,9 @@ projectFieldRouter.delete("/:fieldId", requirePermission(PERMISSIONS.MANAGE_PROJ
 
 // Task-scoped value routes
 const taskFieldValueRouter = express.Router({ mergeParams: true });
-taskFieldValueRouter.use(authMiddleware);
+taskFieldValueRouter.use(authMiddleware, orgMiddleware);
 
 taskFieldValueRouter.get("/", getTaskFieldValues);
-taskFieldValueRouter.put("/:fieldId", validateRequest(setValueSchema), setTaskFieldValue);
+taskFieldValueRouter.put("/:fieldId", requirePermission(PERMISSIONS.EDIT_TASK), validateRequest(setValueSchema), setTaskFieldValue);
 
 module.exports = { projectFieldRouter, taskFieldValueRouter };
