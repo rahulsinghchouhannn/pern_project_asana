@@ -101,7 +101,7 @@ const ListView = ({
   onSectionDeleted,
 }) => {
   const currentUser = useSelector((state) => state.auth.user);
-  const { can, denyToast } = usePermissions(projectId);
+  const { can, guard, denyToast } = usePermissions(projectId);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [customFields, setCustomFields] = useState([]);
   const [visibleFieldIds, setVisibleFieldIds] = useState([]);
@@ -995,7 +995,7 @@ const ListView = ({
                 <th className="py-2 px-2 w-8 text-right">
                   <button
                     ref={addFieldBtnRef}
-                    onClick={() => setShowAddField((v) => !v)}
+                    onClick={() => guard("manage_project_settings", () => setShowAddField((v) => !v))}
                     className="text-gray-400 hover:text-gray-600 transition-colors p-0.5 rounded hover:bg-gray-100"
                     title="Add custom field"
                   >

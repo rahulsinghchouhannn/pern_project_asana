@@ -52,7 +52,7 @@ const ProjectHeader = ({ project, members = [], activeTab, onTabChange, tabs = [
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { show: showToast } = useToast();
-  const { can, denyToast } = usePermissions();
+  const { can, guard, denyToast } = usePermissions();
   const [shareOpen, setShareOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -140,7 +140,7 @@ const ProjectHeader = ({ project, members = [], activeTab, onTabChange, tabs = [
             Share
           </Button>
 
-          <Button variant="ghost" size="sm" onClick={onCustomize}>
+          <Button variant="ghost" size="sm" onClick={() => guard("manage_project_settings", onCustomize)}>
             Customize
           </Button>
 
