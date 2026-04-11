@@ -8,6 +8,9 @@ const {
   refreshTokens,
   invitations,
   organizationMembers,
+  projectMembers,
+  roles,
+  userRoles,
 } = require("../db/schema");
 const organizationService = require("./organizationService");
 const logger = require("../config/logger");
@@ -55,7 +58,7 @@ const register = async ({ name, email, password }) => {
     .limit(1);
 
   if (existing) {
-    const err = new Error("Email already in use");
+    const err = new Error("You are already registered with this email. Please login.");
     err.statusCode = 409;
     throw err;
   }
@@ -77,7 +80,72 @@ const register = async ({ name, email, password }) => {
     .set({ lastActiveOrgId: org.id, updatedAt: new Date() })
     .where(eq(users.id, user.id));
 
+  // ── Auto-grant pending invitation memberships ─────────────────────────────
+  // Process all pending invitations for this email BEFORE getUserOrganizations()
+  // so invited workspaces + projects appear immediately in the sidebar.
+  const pendingInvites = await db
+    .select()
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.invitedEmail, email),
+        eq(invitations.status, "pending")
+      )
+    )
+    .limit(100);
+
+  for (const inv of pendingInvites) {
+    // Upsert org member — safe even if already a member
+    await db
+      .insert(organizationMembers)
+      .values({ organizationId: inv.organizationId, userId: user.id, role: "member" })
+      .onConflictDoNothing();
+
+    // Assign the Member system role so permission checks work
+    const [memberRole] = await db
+      .select({ id: roles.id })
+      .from(roles)
+      .where(
+        and(
+          eq(roles.organizationId, inv.organizationId),
+          eq(roles.name, "Member"),
+          eq(roles.isSystem, true)
+        )
+      )
+      .limit(1);
+
+    if (memberRole) {
+      await db
+        .insert(userRoles)
+        .values({ userId: user.id, organizationId: inv.organizationId, roleId: memberRole.id })
+        .onConflictDoNothing();
+    }
+
+    // Add as project member if this was a project invite
+    if (inv.projectId) {
+      await db
+        .insert(projectMembers)
+        .values({ projectId: inv.projectId, userId: user.id, role: "member" })
+        .onConflictDoNothing();
+    }
+
+    // Mark invitation as accepted
+    await db
+      .update(invitations)
+      .set({ status: "accepted" })
+      .where(eq(invitations.id, inv.id));
+  }
+
+  if (pendingInvites.length > 0) {
+    logger.info({
+      message: "Pending invitations auto-granted on registration",
+      userId: user.id,
+      count: pendingInvites.length,
+    });
+  }
+
   const { accessToken, refreshToken } = await generateTokens(user.id, user.email);
+  // getUserOrganizations() runs AFTER membership inserts — invited workspaces included
   const organizations = await organizationService.getUserOrganizations(user.id);
 
   logger.info({ message: "User registered", userId: user.id });

@@ -4,6 +4,9 @@ const { db } = require("../db");
 const {
   invitations,
   projectMembers,
+  organizationMembers,
+  roles,
+  userRoles,
   users,
   projects,
 } = require("../db/schema");
@@ -97,6 +100,56 @@ const sendProjectInvitation = async (projectId, orgId, invitedBy, email) => {
       })
       .returning();
   }
+
+  // ── CASE 1: Existing user → grant membership immediately ──────────────────
+  if (existingUser) {
+    // Upsert org member — safe even if already a member
+    await db
+      .insert(organizationMembers)
+      .values({ organizationId: orgId, userId: existingUser.id, role: "member" })
+      .onConflictDoNothing();
+
+    // Assign the Member system role so permission checks work
+    const [memberRole] = await db
+      .select({ id: roles.id })
+      .from(roles)
+      .where(
+        and(
+          eq(roles.organizationId, orgId),
+          eq(roles.name, "Member"),
+          eq(roles.isSystem, true)
+        )
+      )
+      .limit(1);
+
+    if (memberRole) {
+      await db
+        .insert(userRoles)
+        .values({ userId: existingUser.id, organizationId: orgId, roleId: memberRole.id })
+        .onConflictDoNothing();
+    }
+
+    // Add as project member — unique index prevents duplicates
+    await db
+      .insert(projectMembers)
+      .values({ projectId, userId: existingUser.id, role: "member" })
+      .onConflictDoNothing();
+
+    // Mark invitation as accepted since membership is granted immediately
+    await db
+      .update(invitations)
+      .set({ status: "accepted" })
+      .where(eq(invitations.id, invitation.id));
+
+    logger.info({
+      message: "Existing user granted immediate project membership",
+      projectId,
+      userId: existingUser.id,
+      email,
+    });
+  }
+  // CASE 2: Email not registered yet — invitation stays pending.
+  // Membership will be granted at registration time (see authService.register).
 
   // Fire-and-forget email — never fail the request if email sending fails
   emailService
