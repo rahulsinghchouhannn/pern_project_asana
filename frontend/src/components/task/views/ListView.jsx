@@ -552,8 +552,10 @@ const ListView = ({
     onToggleExpand: handleToggleExpand,
     onAddSubtask: handleAddSubtask,
     onDeleteTask: handleDeleteTask,
+    canCreate: can("create_task"),
     canEdit: can("edit_task"),
     canAssign: can("assign_task"),
+    canDelete: can("delete_task"),
     onPermissionDenied: denyToast,
   });
 
@@ -577,8 +579,10 @@ const ListView = ({
     onOpenDetail: handleOpenDetail,
     isSubtask: true,
     onDeleteTask: handleDeleteTask,
+    canCreate: can("create_task"),
     canEdit: can("edit_task"),
     canAssign: can("assign_task"),
+    canDelete: can("delete_task"),
     onPermissionDenied: denyToast,
   });
 

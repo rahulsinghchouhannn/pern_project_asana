@@ -934,8 +934,10 @@ const TaskRow = ({
   onToggleExpand,
   onAddSubtask,
   onDeleteTask,
+  canCreate = true,
   canEdit = true,
   canAssign = true,
+  canDelete = true,
   onPermissionDenied,
   innerRef,
   draggableProps,
@@ -989,8 +991,14 @@ const TaskRow = ({
     }
   };
 
-  const handleDelete = () => onDeleteTask?.(task.id, task.parentTaskId ?? null);
-  const handleAddSubtaskClick = () => onAddSubtask?.(task.id);
+  const handleDelete = () => {
+    if (!canDelete) { onPermissionDenied?.(); return; }
+    onDeleteTask?.(task.id, task.parentTaskId ?? null);
+  };
+  const handleAddSubtaskClick = () => {
+    if (!canCreate) { onPermissionDenied?.(); return; }
+    onAddSubtask?.(task.id);
+  };
 
   const handleTitleChange = (e) => {
     if (!canEdit) return;
