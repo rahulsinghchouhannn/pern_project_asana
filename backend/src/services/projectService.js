@@ -213,9 +213,29 @@ const updateProject = async (projectId, userId, data, orgId) => {
   return updated;
 };
 
-const archiveProject = async (projectId, userId) => {
+const archiveProject = async (projectId, userId, orgId) => {
+  const [project] = await db
+    .select({ organizationId: projects.organizationId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+
+  throwIf(!project, "Project not found", 404);
+  throwIf(project.organizationId !== orgId, "Project not found", 404);
+
   const role = await getMemberRole(projectId, userId);
-  throwIf(!role || !["owner", "editor"].includes(role), "Insufficient permissions");
+  const hasArchivePermission = await hasPermission(
+    userId,
+    orgId,
+    PERMISSIONS.ARCHIVE_PROJECT,
+    projectId
+  );
+  // Match delete flow: explicit archive_project, or legacy project owner/editor.
+  throwIf(
+    !hasArchivePermission && (!role || !["owner", "editor"].includes(role)),
+    "Insufficient permissions",
+    403
+  );
 
   const [updated] = await db
     .update(projects)

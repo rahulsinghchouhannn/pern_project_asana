@@ -51,6 +51,40 @@ export const updateProject = createAsyncThunk(
   }
 );
 
+/** Maps `archiveProject` rejection (from unwrap) to user-facing toast copy. */
+export const getArchiveErrorToastMessage = (rejectedValue) => {
+  const status =
+    typeof rejectedValue === "object" && rejectedValue !== null
+      ? rejectedValue.status
+      : undefined;
+  const message =
+    typeof rejectedValue === "string"
+      ? rejectedValue
+      : rejectedValue?.message;
+  if (status === 403 || message === "Insufficient permissions") {
+    return "You don't have permission to archive this project.";
+  }
+  return "Failed to archive project.";
+};
+
+/** POST /archive — updates local state from response (no follow-up PUT; avoids update_project requirement). */
+export const archiveProject = createAsyncThunk(
+  "projects/archive",
+  async (projectId, { rejectWithValue }) => {
+    try {
+      const res = await projectService.archiveProject(projectId);
+      return res.data.data;
+    } catch (err) {
+      const status = err.response?.status;
+      const message =
+        err.response?.data?.error ||
+        (typeof err.message === "string" ? err.message : null) ||
+        "Failed to archive project";
+      return rejectWithValue({ message, status });
+    }
+  }
+);
+
 export const deleteProject = createAsyncThunk(
   "projects/delete",
   async (projectId, { rejectWithValue }) => {
@@ -161,6 +195,17 @@ const projectSlice = createSlice({
       state.currentProject = { ...state.currentProject, ...action.payload };
       const idx = state.projects.findIndex((p) => p.id === action.payload.id);
       if (idx !== -1) state.projects[idx] = { ...state.projects[idx], ...action.payload };
+    });
+
+    // archiveProject
+    builder.addCase(archiveProject.fulfilled, (state, action) => {
+      const p = action.payload;
+      if (!p?.id) return;
+      if (state.currentProject?.id === p.id) {
+        state.currentProject = { ...state.currentProject, ...p };
+      }
+      const idx = state.projects.findIndex((proj) => proj.id === p.id);
+      if (idx !== -1) state.projects[idx] = { ...state.projects[idx], ...p };
     });
 
     // deleteProject

@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { fetchOrgProjects, updateProject, deleteProject } from "@/store/slices/projectSlice";
+import {
+  fetchOrgProjects,
+  updateProject,
+  deleteProject,
+  archiveProject,
+  getArchiveErrorToastMessage,
+} from "@/store/slices/projectSlice";
 import {
   switchOrganization,
   updateOrganization,
@@ -11,7 +17,6 @@ import {
 } from "@/store/slices/authSlice";
 import usePermissions from "@/hooks/usePermissions";
 import organizationService from "@/services/organizationService";
-import projectService from "@/services/projectService";
 import { useToast } from "@/components/ui/Toast";
 import ShareProjectModal from "@/components/project/ShareProjectModal";
 import ProjectContextMenu from "@/components/project/ProjectContextMenu";
@@ -312,10 +317,9 @@ const Sidebar = () => {
     const project = dialog.project;
     setDialog(null);
     try {
-      await projectService.archiveProject(project.id);
-      dispatch(updateProject({ projectId: project.id, data: { isArchived: true } }));
-    } catch {
-      showToast("Failed to archive project", "error");
+      await dispatch(archiveProject(project.id)).unwrap();
+    } catch (err) {
+      showToast(getArchiveErrorToastMessage(err), "error");
     }
   };
 

@@ -41,7 +41,8 @@ const update = asyncHandler(async (req, res) => {
 const archive = asyncHandler(async (req, res) => {
   const project = await projectService.archiveProject(
     req.params.id,
-    req.user.userId
+    req.user.userId,
+    req.org.orgId
   );
   res.status(200).json(successResponse(project));
 });

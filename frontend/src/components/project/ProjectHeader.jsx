@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppDispatch } from "@/store/hooks";
-import { deleteProject, updateProject } from "@/store/slices/projectSlice";
+import { deleteProject, archiveProject, getArchiveErrorToastMessage } from "@/store/slices/projectSlice";
 import Button from "@/components/ui/Button";
+import { useToast } from "@/components/ui/Toast";
 import ShareProjectModal from "./ShareProjectModal";
 import usePermissions from "@/hooks/usePermissions";
-import projectService from "@/services/projectService";
 
 const ChevronIcon = () => (
   <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -51,6 +51,7 @@ const AvatarStack = ({ members }) => {
 const ProjectHeader = ({ project, members = [], activeTab, onTabChange, tabs = [], onCustomize }) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const { show: showToast } = useToast();
   const { can, denyToast } = usePermissions();
   const [shareOpen, setShareOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -81,10 +82,9 @@ const ProjectHeader = ({ project, members = [], activeTab, onTabChange, tabs = [
     setMenuOpen(false);
     if (!can("archive_project")) { denyToast(); return; }
     try {
-      await projectService.archiveProject(project.id);
-      dispatch(updateProject({ projectId: project.id, data: { isArchived: true } }));
-    } catch {
-      // error silently — project page will remain
+      await dispatch(archiveProject(project.id)).unwrap();
+    } catch (err) {
+      showToast(getArchiveErrorToastMessage(err), "error");
     }
   };
 
