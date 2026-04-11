@@ -19,8 +19,8 @@ const PERMISSIONS = {
   CREATE_TASK: "create_task",
   EDIT_TASK: "edit_task",
   DELETE_TASK: "delete_task",
-  VIEW_TASK: "view_task",
   ASSIGN_TASK: "assign_task",
+  REORDER_TASK: "reorder_task",
 
   // Comment-level
   CREATE_COMMENT: "create_comment",
@@ -40,7 +40,6 @@ const ADMIN_PERMISSIONS = ALL_PERMISSIONS.filter(
 const MEMBER_PERMISSIONS = [
   PERMISSIONS.CREATE_TASK,
   PERMISSIONS.EDIT_TASK,
-  PERMISSIONS.VIEW_TASK,
   PERMISSIONS.CREATE_COMMENT,
 ];
 

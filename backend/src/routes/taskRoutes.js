@@ -27,6 +27,7 @@ router.get("/my", taskController.getMyTasks);
 // ── Bulk position update ──────────────────────────────────────────────────────
 router.post(
   "/bulk-position",
+  requirePermission(PERMISSIONS.REORDER_TASK),
   validateRequest(bulkUpdatePositionsSchema),
   taskController.bulkUpdatePositions
 );

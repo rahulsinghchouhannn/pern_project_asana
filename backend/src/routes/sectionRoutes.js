@@ -19,7 +19,7 @@ router.use(authMiddleware, orgMiddleware);
 // ── Collection ────────────────────────────────────────────────────────────────
 router.get("/", sectionController.list);
 router.post("/", requirePermission(PERMISSIONS.CREATE_TASK), validateRequest(createSectionSchema), sectionController.create);
-router.post("/reorder", requirePermission(PERMISSIONS.EDIT_TASK), validateRequest(reorderSectionsSchema), sectionController.reorder);
+router.post("/reorder", requirePermission(PERMISSIONS.REORDER_TASK), validateRequest(reorderSectionsSchema), sectionController.reorder);
 
 // ── Member ────────────────────────────────────────────────────────────────────
 router.get("/:sectionId/task-count", sectionController.getTaskCount);

@@ -22,8 +22,8 @@ const PERMISSION_GROUPS = {
     { key: "create_task", label: "Create Task" },
     { key: "edit_task", label: "Edit Task" },
     { key: "delete_task", label: "Delete Task" },
-    { key: "view_task", label: "View Task" },
     { key: "assign_task", label: "Assign Task" },
+    { key: "reorder_task", label: "Reorder Task" },
   ],
   Comment: [
     { key: "create_comment", label: "Create Comment" },

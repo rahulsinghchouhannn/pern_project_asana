@@ -34,6 +34,7 @@ const SectionRow = ({
   onMoveUp,
   onMoveDown,
   colCount = 4,
+  canReorder = true,
   canEdit = true,
   canDelete = true,
   onPermissionDenied,
@@ -124,9 +125,8 @@ const SectionRow = ({
         <div className="flex items-center h-9 gap-1">
           {/* Section drag handle — native HTML5 drag */}
           <span
-            draggable={canEdit}
+            draggable
             onDragStart={(e) => {
-              if (!canEdit) { e.preventDefault(); onPermissionDenied?.(); return; }
               e.dataTransfer.effectAllowed = "move";
               e.dataTransfer.setData("text/plain", section.id);
               onSectionDragStart?.(section.id, e, rowRef.current);
@@ -231,7 +231,7 @@ const SectionRow = ({
 
                 {onMoveUp && (
                   <button
-                    onClick={() => { setShowMenu(false); if (!canEdit) { onPermissionDenied?.(); return; } onMoveUp(); }}
+                    onClick={() => { setShowMenu(false); if (!canReorder) { onPermissionDenied?.(); return; } onMoveUp(); }}
                     className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
                     <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -243,7 +243,7 @@ const SectionRow = ({
 
                 {onMoveDown && (
                   <button
-                    onClick={() => { setShowMenu(false); if (!canEdit) { onPermissionDenied?.(); return; } onMoveDown(); }}
+                    onClick={() => { setShowMenu(false); if (!canReorder) { onPermissionDenied?.(); return; } onMoveDown(); }}
                     className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   >
                     <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

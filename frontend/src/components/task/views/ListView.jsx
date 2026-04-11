@@ -490,6 +490,7 @@ const ListView = ({
   };
 
   const handleMoveSection = useCallback(async (sectionId, direction) => {
+    if (!can("reorder_task")) { denyToast(); return; }
     const idx = sections.findIndex((s) => s.id === sectionId);
     if (idx === -1) return;
     const targetIdx = direction === "up" ? idx - 1 : idx + 1;
@@ -682,6 +683,8 @@ const ListView = ({
 
     if (!dragId || dropIdx === null) return;
 
+    if (!can("reorder_task")) { denyToast(); return; }
+
     const current = sectionsRef.current;
     const srcIdx = current.findIndex((s) => s.id === dragId);
     if (srcIdx === -1 || dropIdx === srcIdx || dropIdx === srcIdx + 1) return;
@@ -703,6 +706,7 @@ const ListView = ({
   // ── Task drag-and-drop ─────────────────────────────────────────────────────
 
   const handleDragEnd = useCallback(async (result) => {
+    if (!can("reorder_task")) { denyToast(); return; }
     const { destination, source, draggableId } = result;
     if (!destination) return;
     if (destination.droppableId === source.droppableId && destination.index === source.index) return;
@@ -804,6 +808,8 @@ const ListView = ({
     setSubtaskDrag({ draggingSubtaskId: null, parentTaskId: null, dropIndex: null });
 
     if (!draggingSubtaskId || draggingParentId !== parentTaskId || dropIndex === null) return;
+
+    if (!can("reorder_task")) { denyToast(); return; }
     const source = subtasksMap[parentTaskId] ?? [];
     const srcIndex = source.findIndex((t) => t.id === draggingSubtaskId);
     if (srcIndex === -1 || dropIndex === srcIndex || dropIndex === srcIndex + 1) return;
@@ -1082,6 +1088,7 @@ const ListView = ({
                       onMoveUp={sectionIndex > 0 ? () => handleMoveSection(section.id, "up") : null}
                       onMoveDown={sectionIndex < sections.length - 1 ? () => handleMoveSection(section.id, "down") : null}
                       colCount={colCount}
+                      canReorder={can("reorder_task")}
                       canEdit={can("edit_task")}
                       canDelete={can("delete_task")}
                       onPermissionDenied={denyToast}
