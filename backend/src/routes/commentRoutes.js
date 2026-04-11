@@ -27,11 +27,13 @@ router.post(
 // Individual comment operations (id is comment id)
 router.put(
   "/comments/:id",
+  requirePermission(PERMISSIONS.EDIT_COMMENT),
   validateRequest(updateCommentSchema),
   commentController.updateComment
 );
 router.delete(
   "/comments/:id",
+  requirePermission(PERMISSIONS.DELETE_COMMENT),
   commentController.deleteComment
 );
 

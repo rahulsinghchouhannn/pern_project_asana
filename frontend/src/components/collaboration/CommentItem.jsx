@@ -44,7 +44,6 @@ const relativeTime = (dateStr) => {
 const CommentItem = ({ comment, currentUserId, onEdit, onDelete }) => {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
-  const isAuthor = comment.authorId === currentUserId;
 
   const handleSaveEdit = () => {
     if (!editContent.trim()) return;
@@ -71,7 +70,7 @@ const CommentItem = ({ comment, currentUserId, onEdit, onDelete }) => {
           {comment.isEdited && (
             <span className="text-xs text-gray-400 italic">(edited)</span>
           )}
-          {isAuthor && !editing && (
+          {!editing && (
             <div className="ml-auto flex items-center gap-1">
               <button
                 onClick={() => { setEditing(true); setEditContent(comment.content); }}

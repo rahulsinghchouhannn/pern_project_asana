@@ -839,6 +839,7 @@ const TaskDetailModal = ({ taskId, projectId, statuses = [], projectMembers = []
             {/* Activity Feed (comments + history) */}
             <ActivityFeed
               taskId={taskId}
+              projectId={projectId ?? task?.projectId}
               projectMembers={projectMembers}
               currentUserId={user?.id}
             />

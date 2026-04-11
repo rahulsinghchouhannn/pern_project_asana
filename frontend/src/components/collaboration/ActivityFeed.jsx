@@ -4,6 +4,7 @@ import CommentBox from "./CommentBox";
 import commentService from "@/services/commentService";
 import activityService from "@/services/activityService";
 import socketService from "@/services/socketService";
+import usePermissions from "@/hooks/usePermissions";
 
 const relativeTime = (dateStr) => {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -35,10 +36,12 @@ const activityLabel = (action, metadata) => {
   return fn ? fn(metadata) : action.replace(/_/g, " ");
 };
 
-const ActivityFeed = ({ taskId, projectMembers = [], currentUserId }) => {
+const ActivityFeed = ({ taskId, projectId, projectMembers = [], currentUserId }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const { can, denyToast } = usePermissions(projectId ?? null);
 
   const fetchActivity = useCallback(() => {
     if (!taskId) return;
@@ -64,6 +67,7 @@ const ActivityFeed = ({ taskId, projectMembers = [], currentUserId }) => {
   }, [taskId, fetchActivity]);
 
   const handleSubmitComment = async (content) => {
+    if (!can("create_comment")) { denyToast(); return; }
     setSubmitting(true);
     try {
       await commentService.createComment(taskId, content);
@@ -76,6 +80,7 @@ const ActivityFeed = ({ taskId, projectMembers = [], currentUserId }) => {
   };
 
   const handleEditComment = async (commentId, content) => {
+    if (!can("edit_comment")) { denyToast(); return; }
     try {
       await commentService.updateComment(commentId, content);
       fetchActivity();
@@ -85,6 +90,7 @@ const ActivityFeed = ({ taskId, projectMembers = [], currentUserId }) => {
   };
 
   const handleDeleteComment = async (commentId) => {
+    if (!can("delete_comment")) { denyToast(); return; }
     try {
       await commentService.deleteComment(commentId);
       fetchActivity();
