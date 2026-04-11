@@ -25,23 +25,111 @@ const DotsIcon = () => (
   </svg>
 );
 
+const AVATAR_COLORS = ["#6366F1","#8B5CF6","#EC4899","#F97316","#22C55E","#3B82F6","#EF4444"];
+const getAvatarColor = (name = "") => {
+  let h = 0; for (const c of name) h += c.charCodeAt(0);
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+};
+
+const getRoleLabel = (role) => {
+  switch (role) {
+    case "owner": return "Project admin";
+    case "editor": return "Editor";
+    case "viewer": return "Viewer";
+    default: return role ? role.charAt(0).toUpperCase() + role.slice(1) : "Member";
+  }
+};
+
 const AvatarStack = ({ members }) => {
   const shown = members.slice(0, 3);
   const overflow = members.length - shown.length;
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
   return (
-    <div className="flex items-center -space-x-1.5">
-      {shown.map((m) => (
-        <div
-          key={m.userId}
-          className="w-7 h-7 rounded-full bg-indigo-500 border-2 border-white flex items-center justify-center text-white text-xs font-bold uppercase shrink-0"
-          title={m.name}
-        >
-          {m.name?.[0] ?? "?"}
-        </div>
-      ))}
-      {overflow > 0 && (
-        <div className="w-7 h-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-gray-600 text-xs font-semibold shrink-0">
-          +{overflow}
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center -space-x-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+        aria-label="View project members"
+      >
+        {shown.map((m) => (
+          <div
+            key={m.userId}
+            className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-white text-xs font-bold uppercase shrink-0"
+            style={{ backgroundColor: getAvatarColor(m.name ?? "") }}
+            title={m.name}
+          >
+            {m.name?.[0] ?? "?"}
+          </div>
+        ))}
+        {overflow > 0 && (
+          <div className="w-7 h-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-gray-600 text-xs font-semibold shrink-0">
+            +{overflow}
+          </div>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-40 py-2">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 pb-2 border-b border-gray-100">
+            <span className="text-sm font-semibold text-gray-800">
+              Project members
+              <span className="ml-1.5 text-xs font-normal text-gray-400">({members.length})</span>
+            </span>
+            <button
+              onClick={() => setOpen(false)}
+              className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Member list */}
+          <div className="max-h-72 overflow-y-auto py-1">
+            {members.length === 0 ? (
+              <p className="px-4 py-3 text-sm text-gray-400">No members yet</p>
+            ) : (
+              members.map((m) => (
+                <div
+                  key={m.userId}
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+                >
+                  {/* Avatar */}
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold uppercase shrink-0"
+                    style={{ backgroundColor: getAvatarColor(m.name ?? "") }}
+                  >
+                    {(m.name ?? "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+                  </div>
+                  {/* Name + email */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{m.name}</p>
+                    {m.email && (
+                      <p className="text-xs text-gray-400 truncate">{m.email}</p>
+                    )}
+                  </div>
+                  {/* Role */}
+                  <span className="text-xs text-gray-500 shrink-0 capitalize">
+                    {getRoleLabel(m.role)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>
