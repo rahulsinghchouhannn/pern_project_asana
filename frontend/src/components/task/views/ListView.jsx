@@ -701,7 +701,7 @@ const ListView = ({
     } catch {
       setSections(prevSections);  // revert on API error
     }
-  }, [projectId, setDragState]);
+  }, [projectId, setDragState, can, denyToast]);
 
   // ── Task drag-and-drop ─────────────────────────────────────────────────────
 
