@@ -32,7 +32,8 @@ const update = asyncHandler(async (req, res) => {
   const project = await projectService.updateProject(
     req.params.id,
     req.user.userId,
-    req.validated
+    req.validated,
+    req.org.orgId
   );
   res.status(200).json(successResponse(project));
 });

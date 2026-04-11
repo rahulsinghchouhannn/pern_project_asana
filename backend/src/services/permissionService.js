@@ -53,17 +53,27 @@ const hasPermission = async (userId, orgId, permission, projectId = null) => {
 
 // ─── Middleware factory ───────────────────────────────────────────────────────
 
-const requirePermission = (permission) => async (req, res, next) => {
+/**
+ * @param {string} permission
+ * @param {{ projectIdParam?: string; deniedMessage?: string }} [options]
+ *   projectIdParam — express param name whose value is the project UUID (e.g. "id" on /projects/:id)
+ */
+const requirePermission = (permission, options = {}) => async (req, res, next) => {
   try {
     const { userId } = req.user;
     const { orgId } = req.org;
-    // For project-scoped routes the projectId may live in different param keys
-    const projectId = req.params.projectId || null;
+    const { projectIdParam, deniedMessage } = options;
+    const projectId =
+      req.params.projectId ||
+      (projectIdParam && req.params[projectIdParam] ? req.params[projectIdParam] : null) ||
+      null;
 
     const perms = await getUserPermissions(userId, orgId, projectId);
 
     if (!perms.has(permission)) {
-      return res.status(403).json(errorResponse("Insufficient permissions"));
+      return res
+        .status(403)
+        .json(errorResponse(deniedMessage || "Insufficient permissions"));
     }
 
     next();

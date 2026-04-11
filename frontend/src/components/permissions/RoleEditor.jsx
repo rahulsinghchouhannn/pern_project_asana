@@ -13,6 +13,7 @@ const PERMISSION_GROUPS = {
   Project: [
     { key: "create_project", label: "Create Project" },
     { key: "delete_project", label: "Delete Project" },
+    { key: "update_project", label: "Update Project" },
     { key: "archive_project", label: "Archive Project" },
     { key: "manage_project_members", label: "Manage Project Members" },
     { key: "manage_project_settings", label: "Manage Project Settings" },

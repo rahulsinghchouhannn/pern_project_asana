@@ -249,7 +249,7 @@ const Sidebar = () => {
   };
 
   const handleRename = (project) => {
-    if (!can("manage_project_settings")) { denyToast(); return; }
+    if (!can("update_project")) { denyToast(); return; }
     const r = { id: project.id, value: project.name, original: project.name };
     renamingRef.current = r;
     setRenaming(r);

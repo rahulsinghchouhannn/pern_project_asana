@@ -9,6 +9,7 @@ const PERMISSIONS = {
 
   // Project-level
   CREATE_PROJECT: "create_project",
+  UPDATE_PROJECT: "update_project",
   DELETE_PROJECT: "delete_project",
   ARCHIVE_PROJECT: "archive_project",
   MANAGE_PROJECT_MEMBERS: "manage_project_members",

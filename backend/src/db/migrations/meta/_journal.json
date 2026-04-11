@@ -120,6 +120,20 @@
       "when": 1744300000000,
       "tag": "0016_activity_logs_project_fk_cascade",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1744400000000,
+      "tag": "0017_grant_update_project_system_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1775887271603,
+      "tag": "0018_fancy_starfox",
+      "breakpoints": true
     }
   ]
 }

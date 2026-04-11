@@ -185,9 +185,23 @@ const getProjectById = async (projectId, userId) => {
   };
 };
 
-const updateProject = async (projectId, userId, data) => {
-  const role = await getMemberRole(projectId, userId);
-  throwIf(!role || !["owner", "editor"].includes(role), "Insufficient permissions");
+const updateProject = async (projectId, userId, data, orgId) => {
+  const [project] = await db
+    .select({ organizationId: projects.organizationId })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+
+  throwIf(!project, "Project not found", 404);
+  throwIf(project.organizationId !== orgId, "Project not found", 404);
+
+  const allowed = await hasPermission(
+    userId,
+    orgId,
+    PERMISSIONS.UPDATE_PROJECT,
+    projectId
+  );
+  throwIf(!allowed, "You do not have permission to update this project.", 403);
 
   const [updated] = await db
     .update(projects)
