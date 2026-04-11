@@ -1038,8 +1038,9 @@ const TaskRow = ({
       for (const a of existing) await taskService.removeAssignee(task.id, a.userId);
       const res = await taskService.addAssignee(task.id, member.userId);
       onUpdated?.(res.data.data);
-    } catch {
+    } catch (err) {
       setAssignees(task.assignees ?? []);
+      if (err?.response?.status === 403) { onPermissionDenied?.(); }
     }
   };
 
